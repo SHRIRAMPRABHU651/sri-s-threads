@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Emblem } from "@/components/Logo";
+import { LogoStacked } from "@/components/Logo";
 
 function LoginForm() {
   const router = useRouter();
@@ -33,7 +33,7 @@ function LoginForm() {
         }
       }}
     >
-      <Emblem size={72} title="Sri's Threads" />
+      <LogoStacked width={230} />
       <h1>Admin sign in</h1>
       <label>Username<input name="username" autoComplete="username" required autoFocus /></label>
       <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>

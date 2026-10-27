@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   title: { default: "Sri's Threads — Traditional | Ethnic | Elegant", template: "%s — Sri's Threads" },
   description: "Women's ethnic wear — sarees, chudidhar, kurtis, lehengas and more. Order on WhatsApp. Traditional, ethnic and elegant, from Sri's Threads.",
   openGraph: { siteName: "Sri's Threads", type: "website" },
-  icons: { icon: "/logo-emblem.svg" },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#092b2b" };

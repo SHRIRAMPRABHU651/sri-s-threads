@@ -82,7 +82,7 @@ Nothing is written to disk, so it works on Vercel's read-only filesystem.
 
 ## Logo
 
-Hand-built SVG: `components/Logo.tsx` (header, loader, footer, admin) plus standalone `public/logo-emblem.svg` and `public/logo.svg`.
+The real Sri's Threads logo artwork: `public/logo-full.webp` (loader, login), `public/logo-lockup.webp` (header), `public/logo-emblem.webp` (footer, admin), favicons in `app/icon.png` / `app/apple-icon.png`. All are transparent and wired up in `components/Logo.tsx`.
 
 ## Content notes
 

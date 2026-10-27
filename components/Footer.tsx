@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getSettings } from "@/lib/db";
-import { LogoStacked, Wordmark } from "./Logo";
+import { Emblem, Wordmark } from "./Logo";
 import NewsletterForm from "./NewsletterForm";
 
 export default async function Footer() {
@@ -42,7 +42,7 @@ export default async function Footer() {
         </div>
       </section>
       <div className="footer-main">
-        <div className="footer-logo"><LogoStacked /></div>
+        <div className="footer-logo"><Emblem size={145} title="Sri's Threads" /></div>
         <div className="footer-links">
           <div className="footer-links__col"><h3>Company</h3><ul>{links(company)}</ul></div>
           <div className="footer-links__col"><h3>Policies</h3><ul>{links(policies)}</ul></div>
@@ -61,7 +61,7 @@ export default async function Footer() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/assets/img/footer-weavers.webp" alt="Weavers at a handloom" loading="lazy" />
           </div>
-          <div className="footer-art__word"><Wordmark height={44} /></div>
+          <div className="footer-art__word"><Wordmark height={52} /></div>
         </div>
       </div>
       <div className="footer-base">

@@ -25,7 +25,7 @@
   width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px; align-items: stretch; padding: 28px;
   background: #fff; border: 1px solid var(--a-line); border-radius: 16px; box-shadow: 0 10px 30px rgba(12, 60, 60, 0.08);
 }
-.login__card svg { align-self: center; }
+.login__card svg, .login__card img { align-self: center; }
 .login__card h1 { text-align: center; font: 600 20px/28px Cinzel, Georgia, serif; color: var(--a-brand); }
 .login__card label, .a-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 500; font-size: 12px; color: var(--a-mute); }
 .login__card input, .a-form input, .a-form textarea, .a-form select, .a-filter select, .a-filter input {
