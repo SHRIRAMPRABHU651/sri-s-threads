@@ -1,6 +1,16 @@
-import type { Coupon, Product } from "./types";
+import type { Coupon, Department, Product } from "./types";
 
 export const BRAND = "Sri's Threads";
+
+export const DEPARTMENTS: { slug: Department; label: string; blurb: string; image: string; sizes: string[] }[] = [
+  { slug: "women", label: "Women", blurb: "Sarees, chudidhar, kurtis, lehengas & more", image: "/assets/img/collection-1.webp", sizes: ["Free size", "XS", "S", "M", "L", "XL", "XXL"] },
+  { slug: "men", label: "Men", blurb: "Kurtas, sherwanis, jackets & festive sets", image: "/assets/img/dept-men.webp", sizes: ["S", "M", "L", "XL", "XXL", "3XL"] },
+  { slug: "kids", label: "Kids", blurb: "Festive and everyday ethnic wear for little ones", image: "/assets/img/dept-kids.webp", sizes: ["0-1Y", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y", "12-13Y"] },
+  { slug: "accessories", label: "Accessories", blurb: "Jewellery, bags, dupattas, footwear & more", image: "/assets/img/dept-accessories.webp", sizes: ["Free size"] },
+];
+
+export const isDepartment = (v: unknown): v is Department => DEPARTMENTS.some((d) => d.slug === v);
+export const departmentLabel = (slug: string) => DEPARTMENTS.find((d) => d.slug === slug)?.label ?? slug;
 
 export const COLLECTION_KINDS = [
   { kind: "collection", title: "Top Collection", path: "/collections", param: "collection" },
@@ -42,3 +52,17 @@ export function evaluateCoupon(coupon: Coupon | undefined, subtotal: number, now
 export function couponHeadline(c: Pick<Coupon, "type" | "value">) {
   return c.type === "percent" ? `${c.value}% OFF` : `₹${c.value} OFF`;
 }
+
+/** Shop list sort options (value is the URL `sort` param). */
+export const SORTS = [
+  { value: "featured", label: "Featured" },
+  { value: "new", label: "Newest first" },
+  { value: "low", label: "Price: low to high" },
+  { value: "high", label: "Price: high to low" },
+  { value: "discount", label: "Biggest discount" },
+  { value: "name", label: "Name: A to Z" },
+] as const;
+export type SortValue = (typeof SORTS)[number]["value"];
+
+export const DISCOUNT_STEPS = [10, 20, 30, 40, 50] as const;
+export const PAGE_SIZE = 12;

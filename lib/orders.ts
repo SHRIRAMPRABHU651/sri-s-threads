@@ -22,11 +22,16 @@ export async function placeOrder(input: OrderInput): Promise<Order | { error: st
     const p = products.find((x) => x.id === l.productId);
     if (!p || !p.active) return { error: "One of the items in your bag is no longer available." };
     const color = l.color || undefined;
+    if (color && p.colors.length && !p.colors.some((c) => c.name === color)) return { error: `${p.name} is no longer available in ${color}.` };
+    // sizes: required when there is a choice, otherwise implied
+    const size = p.sizes.length > 1 ? l.size : p.sizes[0];
+    if (p.sizes.length > 1 && (!size || !p.sizes.includes(size))) return { error: `Please choose a size for ${p.name}.` };
     items.push({
       productId: p.id,
       name: p.name,
       image: p.colors.find((c) => c.name === color)?.image || p.images[0],
       color,
+      size,
       qty: l.qty,
       price: salePrice(p),
       mrp: p.mrp,

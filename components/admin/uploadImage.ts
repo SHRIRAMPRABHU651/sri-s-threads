@@ -1,9 +1,12 @@
 /**
- * Shrinks a photo in the browser before upload (max 1400px, WebP/JPEG ~82%).
- * Phone photos are often 4–8 MB; Vercel rejects request bodies over 4.5 MB, and smaller images
- * also keep the free MongoDB tier going much longer.
+ * Admin image upload.
+ *  1. Shrink the photo in the browser (max 2000px, WebP/JPEG) — phones produce 4–8 MB files.
+ *  2. Ask the server for a short-lived signature (admin only).
+ *  3a. Cloudinary configured → upload straight to Cloudinary (no Vercel body-size limit, nothing passes through our server).
+ *  3b. Not configured → fall back to POST /api/upload (stored in MongoDB).
+ * The server decides which path is active, so development and production can differ without any code change.
  */
-export async function compressImage(file: File, maxDim = 1400, quality = 0.82): Promise<Blob> {
+export async function compressImage(file: File, maxDim = 2000, quality = 0.84): Promise<Blob> {
   if (file.type === "image/gif") return file;
   try {
     const bmp = await createImageBitmap(file);
@@ -21,12 +24,57 @@ export async function compressImage(file: File, maxDim = 1400, quality = 0.82): 
   }
 }
 
-export async function uploadImage(file: File): Promise<{ url: string } | { error: string }> {
+type Signed = {
+  provider: "cloudinary";
+  uploadUrl: string;
+  apiKey: string;
+  params: Record<string, string | number>;
+  signature: string;
+};
+
+function postWithProgress(url: string, form: FormData, onProgress?: (pct: number) => void): Promise<{ status: number; body: Record<string, unknown> }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(Math.round((e.loaded / e.total) * 100));
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.onload = () => {
+      let body: Record<string, unknown> = {};
+      try { body = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
+      resolve({ status: xhr.status, body });
+    };
+    xhr.send(form);
+  });
+}
+
+export async function uploadImage(file: File, onProgress?: (pct: number) => void): Promise<{ url: string } | { error: string }> {
+  if (!/^image\/(jpeg|png|webp|gif|avif)$/.test(file.type)) return { error: "Please choose a JPG, PNG, WebP or GIF image." };
   const blob = await compressImage(file);
-  const form = new FormData();
-  form.append("file", blob, file.name);
-  const res = await fetch("/api/upload", { method: "POST", body: form }).catch(() => null);
-  const body = await res?.json().catch(() => null);
-  if (res?.status === 401) { window.location.href = "/admin/login"; return { error: "Session expired" }; }
-  return res?.ok && body?.url ? { url: body.url } : { error: body?.error || (res?.status === 413 ? "Image is too large." : "Upload failed.") };
+
+  const signRes = await fetch("/api/upload/sign").catch(() => null);
+  if (signRes?.status === 401) { window.location.href = "/admin/login"; return { error: "Session expired" }; }
+  const signed = (await signRes?.json().catch(() => null)) as Signed | { provider: "mongodb" } | null;
+  if (!signed) return { error: "Couldn't reach the server. Check your connection." };
+
+  try {
+    if (signed.provider === "cloudinary") {
+      const form = new FormData();
+      Object.entries(signed.params).forEach(([k, v]) => form.append(k, String(v)));
+      form.append("api_key", signed.apiKey);
+      form.append("signature", signed.signature);
+      form.append("file", blob, file.name);
+      const { status, body } = await postWithProgress(signed.uploadUrl, form, onProgress);
+      const url = body.secure_url as string | undefined;
+      if (status >= 200 && status < 300 && url) return { url };
+      return { error: (body.error as { message?: string } | undefined)?.message || "Cloudinary rejected the upload." };
+    }
+    const form = new FormData();
+    form.append("file", blob, file.name);
+    const { status, body } = await postWithProgress("/api/upload", form, onProgress);
+    if (status === 401) { window.location.href = "/admin/login"; return { error: "Session expired" }; }
+    if (status === 413) return { error: "Image is too large." };
+    return typeof body.url === "string" ? { url: body.url } : { error: (body.error as string) || "Upload failed." };
+  } catch (e) {
+    return { error: (e as Error).message || "Upload failed." };
+  }
 }

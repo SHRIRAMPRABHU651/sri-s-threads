@@ -3,16 +3,17 @@
 import type { Product } from "@/lib/types";
 import { useCarousel } from "./useCarousel";
 import ProductCard from "./ProductCard";
+import { Reveal } from "./motion/Reveal";
 
 export default function TrendingCarousel({ products }: { products: Product[] }) {
   const c = useCarousel(products.length);
   return (
     <div className={`trending carousel${c.isStatic ? " is-static" : ""}`}>
       <div className="carousel__track" ref={c.track}>
-        {products.map((p) => (
-          <div className="carousel__slide" key={p.id}>
+        {products.map((p, i) => (
+          <Reveal key={p.id} className="carousel__slide" delay={Math.min(i, 5) * 0.07}>
             <ProductCard p={p} />
-          </div>
+          </Reveal>
         ))}
       </div>
       <div className="carousel__arrows" data-arrow>

@@ -36,6 +36,7 @@ export async function POST(req: Request) {
         productId: str(l?.productId, 40),
         qty: Math.max(1, Math.min(10, Math.round(num(l?.qty, 1)))),
         color: str(l?.color, 40) || undefined,
+        size: str(l?.size, 20) || undefined,
       }))
     : [];
   if (lines.length === 0) return fail("Your bag is empty.");

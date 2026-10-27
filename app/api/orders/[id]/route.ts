@@ -1,4 +1,4 @@
-import { deleteOrder, setOrderStatus } from "@/lib/db";
+import { deleteOrder, setOrderNote, setOrderStatus } from "@/lib/db";
 import { fail, json, readJson, requireAdmin } from "@/lib/api";
 import type { OrderStatus } from "@/lib/types";
 
@@ -8,7 +8,10 @@ const STATUSES: OrderStatus[] = ["new", "confirmed", "shipped", "delivered", "ca
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const denied = await requireAdmin();
   if (denied) return denied;
-  const body = await readJson<{ status?: OrderStatus }>(req);
+  const body = await readJson<{ status?: OrderStatus; adminNote?: string }>(req);
+  if (typeof body?.adminNote === "string" && !body.status) {
+    return (await setOrderNote(params.id, body.adminNote)) ? json({ ok: true }) : fail("Order not found.", 404);
+  }
   if (!body?.status || !STATUSES.includes(body.status)) return fail("Invalid status.");
   const o = await setOrderStatus(params.id, body.status);
   if (!o) return fail("Order not found.", 404);

@@ -1,48 +1,42 @@
-import Link from "next/link";
-import CollectionGrid from "@/components/CollectionGrid";
+import DeptCards from "@/components/DeptCards";
+import FeaturedTabs from "@/components/FeaturedTabs";
 import HeroCarousel from "@/components/HeroCarousel";
+import PromoCards from "@/components/PromoCards";
 import Reels from "@/components/Reels";
 import SectionTitle from "@/components/SectionTitle";
 import Testimonials from "@/components/Testimonials";
 import TrendingCarousel from "@/components/TrendingCarousel";
-import { listCollections, listProducts } from "@/lib/db";
+import Marquee from "@/components/motion/Marquee";
+import { Reveal } from "@/components/motion/Reveal";
+import { queryProducts } from "@/lib/catalog";
+import { listCollections } from "@/lib/db";
 import { BRAND } from "@/lib/shared";
 
 export default async function HomePage() {
-  const [products, collections] = await Promise.all([listProducts(), listCollections("collection")]);
-  // featured ones first; if none are flagged, still show the first few so the section is never empty
-  const flagged = collections.filter((c) => c.featured);
-  const featured = (flagged.length ? flagged : collections).slice(0, 8);
-  const trending = products.filter((p) => p.trending).slice(0, 12);
-  const looks = (trending.length ? trending : products).slice(0, 7);
+  const [{ items }, collections] = await Promise.all([queryProducts({ sort: "featured", page: 1 }), listCollections("collection")]);
+  const trending = items.slice(0, 12);
+  const looks = items.slice(0, 7);
+  // featured collections first; if none are flagged for a department we still show its first few so tabs are never empty
+  const featured = collections.filter((c) => c.featured);
 
   return (
     <>
       <HeroCarousel />
+      <Marquee items={["Women", "Men", "Kids", "Accessories", "Order on WhatsApp", "New arrivals every week", "Traditional · Ethnic · Elegant"]} />
+
+      <section className="section">
+        <SectionTitle eyebrow="Shop by">Department</SectionTitle>
+        <DeptCards />
+      </section>
 
       {featured.length > 0 && (
         <section className="section">
           <SectionTitle>{BRAND}</SectionTitle>
-          <CollectionGrid cards={featured} hrefFor={(c) => `/shop?collection=${c.slug}`} variant={featured.length <= 2 ? "2" : undefined} />
+          <Reveal y={16}><FeaturedTabs collections={featured} /></Reveal>
         </section>
       )}
 
-      <section className="promo-grid" aria-label="Shop by">
-        <div className="promo-card">
-          <div className="promo-card__body">
-            <p className="promo-card__title">Shop by Fabric</p>
-            <Link href="/collections/fabric" className="btn">Shop more <img src="/assets/icons/arrow-up-right.svg" alt="" /></Link>
-          </div>
-          <div className="promo-card__img"><img src="/assets/img/shop-fabric.webp" alt="" loading="lazy" /></div>
-        </div>
-        <div className="promo-card">
-          <div className="promo-card__body">
-            <p className="promo-card__title">Shop by Occasion</p>
-            <Link href="/collections/occasion" className="btn">Shop more <img src="/assets/icons/arrow-up-right.svg" alt="" /></Link>
-          </div>
-          <div className="promo-card__img"><img src="/assets/img/shop-occasion.webp" alt="" loading="lazy" /></div>
-        </div>
-      </section>
+      <PromoCards />
 
       {trending.length > 0 && (
         <section className="section">
@@ -60,7 +54,7 @@ export default async function HomePage() {
 
       <section className="section">
         <SectionTitle>Love from our community</SectionTitle>
-        <Testimonials />
+        <Reveal y={24}><Testimonials /></Reveal>
       </section>
     </>
   );

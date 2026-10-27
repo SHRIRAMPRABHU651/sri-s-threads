@@ -1,4 +1,4 @@
-import type { Collection, Coupon, Product, Settings } from "./types";
+import type { Collection, Coupon, Department, Product, Settings } from "./types";
 import { slugify } from "./shared";
 
 const now = () => new Date().toISOString();
@@ -7,7 +7,8 @@ const img = (n: string) => `/assets/img/${n}.webp`;
 const base = {
   details: "Fabric: As described\nSize: Free size\nWork: Woven / printed as shown",
   care: "Dry clean recommended for the first wash.\nStore folded in a cool, dry place away from direct sunlight.\nSlight colour variation may occur due to screen settings and the handmade nature of the weave.",
-  size: "Free size",
+  sizes: ["Free size"],
+  department: "women" as Department,
   stock: 25,
   active: true,
 };
@@ -54,24 +55,48 @@ export function seedProducts(): Product[] {
   })) as Product[];
 }
 
-const col = (kind: Collection["kind"], slug: string, name: string, image: string, sort: number, featured = false): Collection => ({
-  id: `${kind}_${slug}`, kind, slug, name, image: img(image), featured, active: true, sort,
+const col = (kind: Collection["kind"], slug: string, name: string, image: string, sort: number, department: Collection["department"] = "", featured = false): Collection => ({
+  id: `${kind}_${slug}`, kind, slug, name, image: img(image), department, featured, active: true, sort,
 });
 
+/** Every collection the store ships with. The same list is used for first-run seeding and for the one-time upgrade of older databases. */
 export function seedCollections(): Collection[] {
   return [
-    col("collection", "sarees", "Sarees", "collection-1", 1, true),
-    col("collection", "chudidhar", "Chudidhar", "collection-3", 2, true),
-    col("collection", "kurtis", "Kurtis", "collection-5", 3, true),
-    col("collection", "lehengas", "Lehengas", "collection-6", 4, true),
-    col("collection", "anarkali", "Anarkali", "collection-4", 5),
-    col("collection", "dress-materials", "Dress Materials", "collection-2", 6),
+    // Women
+    col("collection", "sarees", "Sarees", "collection-1", 1, "women", true),
+    col("collection", "chudidhar", "Chudidhar", "collection-3", 2, "women", true),
+    col("collection", "kurtis", "Kurtis", "collection-5", 3, "women", true),
+    col("collection", "lehengas", "Lehengas", "collection-6", 4, "women", true),
+    col("collection", "anarkali", "Anarkali", "collection-4", 5, "women"),
+    col("collection", "dress-materials", "Dress Materials", "collection-2", 6, "women"),
+    // Men
+    col("collection", "kurtas", "Kurtas", "dept-men", 1, "men", true),
+    col("collection", "sherwanis", "Sherwanis", "dept-men", 2, "men", true),
+    col("collection", "nehru-jackets", "Nehru Jackets", "dept-men", 3, "men"),
+    col("collection", "dhoti-sets", "Dhoti Sets", "dept-men", 4, "men"),
+    col("collection", "ethnic-shirts", "Ethnic Shirts", "dept-men", 5, "men"),
+    // Kids
+    col("collection", "girls-lehengas", "Girls Lehengas", "dept-kids", 1, "kids", true),
+    col("collection", "girls-frocks", "Girls Frocks", "dept-kids", 2, "kids", true),
+    col("collection", "boys-kurta-sets", "Boys Kurta Sets", "dept-kids", 3, "kids"),
+    col("collection", "boys-sherwanis", "Boys Sherwanis", "dept-kids", 4, "kids"),
+    col("collection", "kids-festive", "Festive Wear", "dept-kids", 5, "kids"),
+    // Accessories
+    col("collection", "jewellery", "Jewellery", "dept-accessories", 1, "accessories", true),
+    col("collection", "bags-potlis", "Bags & Potlis", "dept-accessories", 2, "accessories", true),
+    col("collection", "dupattas-stoles", "Dupattas & Stoles", "dept-accessories", 3, "accessories"),
+    col("collection", "footwear", "Footwear", "dept-accessories", 4, "accessories"),
+    col("collection", "hair-accessories", "Hair Accessories", "dept-accessories", 5, "accessories"),
+    // Shop by fabric (all departments)
     col("fabric", "silk", "Silk", "collection-1", 1),
     col("fabric", "cotton", "Cotton", "collection-2", 2),
     col("fabric", "georgette", "Georgette", "collection-3", 3),
     col("fabric", "muslin", "Muslin", "collection-4", 4),
     col("fabric", "chanderi", "Chanderi", "collection-5", 5),
     col("fabric", "banarasi", "Banarasi", "collection-6", 6),
+    col("fabric", "linen", "Linen", "collection-2", 7),
+    col("fabric", "velvet", "Velvet", "collection-6", 8),
+    // Shop by occasion (all departments)
     col("occasion", "festive", "Festive Wear", "collection-1", 1),
     col("occasion", "wedding", "Wedding Wear", "collection-2", 2),
     col("occasion", "party", "Party Wear", "collection-3", 3),

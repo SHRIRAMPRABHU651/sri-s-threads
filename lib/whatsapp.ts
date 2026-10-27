@@ -14,7 +14,7 @@ export function orderMessage(o: Pick<Order, "number" | "customer" | "items" | "s
     "",
     "*Items*",
     ...o.items.map(
-      (it, i) => `${i + 1}. ${it.name}${it.color ? ` (${it.color})` : ""} × ${it.qty} — ${inr(it.price * it.qty)}`,
+      (it, i) => `${i + 1}. ${it.name}${[it.color, it.size && `Size ${it.size}`].filter(Boolean).length ? ` (${[it.color, it.size && `Size ${it.size}`].filter(Boolean).join(", ")})` : ""} × ${it.qty} — ${inr(it.price * it.qty)}`,
     ),
     "",
     `Subtotal: ${inr(o.subtotal)}`,

@@ -1,5 +1,5 @@
 import { bool, num, str } from "./api";
-import { slugify } from "./shared";
+import { isDepartment, slugify } from "./shared";
 import type { Collection } from "./types";
 
 const KINDS: Collection["kind"][] = ["collection", "fabric", "occasion"];
@@ -13,5 +13,6 @@ export function parseCollection(body: Record<string, unknown>): Omit<Collection,
   if (!image) return { error: "Add an image for the collection card." };
   const slug = slugify(str(body.slug, 80) || name);
   if (!slug) return { error: "Name must contain letters or numbers." };
-  return { kind, slug, name, image, featured: kind === "collection" && bool(body.featured), active: body.active === undefined ? true : bool(body.active), sort: Math.round(num(body.sort, 100)) };
+  const department = kind === "collection" ? (isDepartment(body.department) ? body.department : "women") : "";
+  return { kind, slug, name, image, department, featured: kind === "collection" && bool(body.featured), active: body.active === undefined ? true : bool(body.active), sort: Math.round(num(body.sort, 100)) };
 }

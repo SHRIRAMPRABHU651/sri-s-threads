@@ -1,32 +1,32 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Collection, CollectionKind } from "@/lib/types";
-import { COLLECTION_KINDS } from "@/lib/shared";
+import type { Collection, CollectionKind, Department } from "@/lib/types";
+import { COLLECTION_KINDS, DEPARTMENTS, departmentLabel } from "@/lib/shared";
 import { api } from "./api";
 import { uploadImage } from "./uploadImage";
 
-type Draft = { kind: CollectionKind; name: string; image: string; featured: boolean; active: boolean; sort: string };
+type Draft = { kind: CollectionKind; department: Department; name: string; image: string; featured: boolean; active: boolean; sort: string };
 
-function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collection; defaultKind: CollectionKind; onClose: () => void; onSaved: () => void }) {
+function CollectionForm({ item, defaultKind, defaultDept, onClose, onSaved }: { item?: Collection; defaultKind: CollectionKind; defaultDept: Department; onClose: () => void; onSaved: () => void }) {
   const [d, setD] = useState<Draft>(
     item
-      ? { kind: item.kind, name: item.name, image: item.image, featured: item.featured, active: item.active, sort: String(item.sort) }
-      : { kind: defaultKind, name: "", image: "", featured: true, active: true, sort: "100" },
+      ? { kind: item.kind, department: (item.department || "women") as Department, name: item.name, image: item.image, featured: item.featured, active: item.active, sort: String(item.sort) }
+      : { kind: defaultKind, department: defaultDept, name: "", image: "", featured: true, active: true, sort: "100" },
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [pct, setPct] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
 
   async function pick(files: FileList | null) {
     if (!files?.[0]) return;
-    setUploading(true);
+    setPct(0);
     setError("");
-    const r = await uploadImage(files[0]);
+    const r = await uploadImage(files[0], setPct);
     if ("url" in r) set("image", r.url); else setError(r.error);
-    setUploading(false);
+    setPct(null);
     if (file.current) file.current.value = "";
   }
 
@@ -51,6 +51,13 @@ function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collec
               {COLLECTION_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.title}</option>)}
             </select>
           </label>
+          {d.kind === "collection" && (
+            <label>Department
+              <select value={d.department} onChange={(e) => set("department", e.target.value as Department)}>
+                {DEPARTMENTS.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}
+              </select>
+            </label>
+          )}
           <label>Display order (lower shows first)<input type="number" value={d.sort} onChange={(e) => set("sort", e.target.value)} /></label>
           <div className="span2 a-fieldset">
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--a-mute)" }}>Card image (portrait photo works best)</span>
@@ -62,7 +69,7 @@ function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collec
                 </div>
               )}
               <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => pick(e.target.files)} />
-              <button type="button" className="a-btn" onClick={() => file.current?.click()} disabled={uploading}>{uploading ? "Uploading…" : d.image ? "Change image" : "Upload image"}</button>
+              <button type="button" className="a-btn" onClick={() => file.current?.click()} disabled={pct !== null}>{pct !== null ? `Uploading ${pct}%…` : d.image ? "Change image" : "Upload image"}</button>
             </div>
           </div>
           {d.kind === "collection" && <label className="a-check"><input type="checkbox" checked={d.featured} onChange={(e) => set("featured", e.target.checked)} /> Show on the home page</label>}
@@ -71,7 +78,7 @@ function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collec
         {error && <p className="a-error" role="alert">{error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="a-btn" onClick={onClose}>Cancel</button>
-          <button className="a-btn a-btn--primary" type="submit" disabled={busy || uploading || !d.image}>{busy ? "Saving…" : "Save collection"}</button>
+          <button className="a-btn a-btn--primary" type="submit" disabled={busy || pct !== null || !d.image}>{busy ? "Saving…" : "Save collection"}</button>
         </div>
       </form>
     </div>
@@ -79,7 +86,7 @@ function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collec
 }
 
 export default function CollectionsTab({ groups, counts, reload }: { groups: Collection[]; counts: Record<string, number>; reload: () => void }) {
-  const [editing, setEditing] = useState<{ item?: Collection; kind: CollectionKind } | null>(null);
+  const [editing, setEditing] = useState<{ item?: Collection; kind: CollectionKind; dept: Department } | null>(null);
 
   async function remove(c: Collection) {
     const n = counts[`${c.kind}:${c.slug}`] ?? 0;
@@ -93,6 +100,28 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
     reload();
   }
 
+  const row = (c: Collection, param: string) => (
+    <div className="a-row" key={c.id}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="thumb" src={c.image} alt="" loading="lazy" />
+      <div className="a-row__main">
+        <span className="a-row__title">{c.name}</span>
+        <span className="a-row__meta">
+          <span className={`a-pill${c.active ? "" : " a-pill--off"}`}>{c.active ? "Visible" : "Hidden"}</span>
+          {c.featured && <span className="a-pill a-pill--warn">On home page</span>}
+          <span>{counts[`${c.kind}:${c.slug}`] ?? 0} products</span>
+          <span>Order {c.sort}</span>
+        </span>
+      </div>
+      <div className="a-row__actions">
+        <a className="a-btn a-btn--sm" href={`/shop?${param}=${c.slug}`} target="_blank" rel="noreferrer">View</a>
+        <button className="a-btn a-btn--sm" onClick={() => toggle(c)}>{c.active ? "Hide" : "Show"}</button>
+        <button className="a-btn a-btn--sm" onClick={() => setEditing({ item: c, kind: c.kind, dept: (c.department || "women") as Department })}>Edit</button>
+        <button className="a-btn a-btn--sm a-btn--danger" onClick={() => remove(c)}>Delete</button>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {COLLECTION_KINDS.map((k) => {
@@ -101,36 +130,25 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
           <section key={k.kind} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div className="a-head">
               <h2>{k.title} ({items.length})</h2>
-              <button className="a-btn a-btn--primary" onClick={() => setEditing({ kind: k.kind })}>+ Add</button>
+              <button className="a-btn a-btn--primary" onClick={() => setEditing({ kind: k.kind, dept: "women" })}>+ Add</button>
             </div>
-            <div className="a-list">
-              {items.map((c) => (
-                <div className="a-row" key={c.id}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="thumb" src={c.image} alt="" />
-                  <div className="a-row__main">
-                    <span className="a-row__title">{c.name}</span>
-                    <span className="a-row__meta">
-                      <span className={`a-pill${c.active ? "" : " a-pill--off"}`}>{c.active ? "Visible" : "Hidden"}</span>
-                      {c.featured && <span className="a-pill a-pill--warn">On home page</span>}
-                      <span>{counts[`${c.kind}:${c.slug}`] ?? 0} products</span>
-                      <span>Order {c.sort}</span>
-                    </span>
+            {k.kind === "collection" ? (
+              DEPARTMENTS.map((d) => {
+                const sub = items.filter((g) => g.department === d.slug);
+                return (
+                  <div key={d.slug} className="a-subgroup">
+                    <div className="a-subgroup__head"><h3>{d.label} <span className="a-mute">({sub.length})</span></h3><button className="a-btn a-btn--sm" onClick={() => setEditing({ kind: "collection", dept: d.slug })}>+ Add to {d.label}</button></div>
+                    <div className="a-list">{sub.map((c) => row(c, k.param))}{sub.length === 0 && <p className="a-mute">No {departmentLabel(d.slug)} collections yet.</p>}</div>
                   </div>
-                  <div className="a-row__actions">
-                    <a className="a-btn a-btn--sm" href={`/shop?${k.param}=${c.slug}`} target="_blank" rel="noreferrer">View</a>
-                    <button className="a-btn a-btn--sm" onClick={() => toggle(c)}>{c.active ? "Hide" : "Show"}</button>
-                    <button className="a-btn a-btn--sm" onClick={() => setEditing({ item: c, kind: c.kind })}>Edit</button>
-                    <button className="a-btn a-btn--sm a-btn--danger" onClick={() => remove(c)}>Delete</button>
-                  </div>
-                </div>
-              ))}
-              {items.length === 0 && <p className="a-mute">None yet.</p>}
-            </div>
+                );
+              })
+            ) : (
+              <div className="a-list">{items.map((c) => row(c, k.param))}{items.length === 0 && <p className="a-mute">None yet.</p>}</div>
+            )}
           </section>
         );
       })}
-      {editing && <CollectionForm item={editing.item} defaultKind={editing.kind} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+      {editing && <CollectionForm item={editing.item} defaultKind={editing.kind} defaultDept={editing.dept} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     </>
   );
 }

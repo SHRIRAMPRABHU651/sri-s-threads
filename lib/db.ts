@@ -2,8 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { randomUUID } from "crypto";
 import { Binary, MongoClient, type Db } from "mongodb";
-import type { Collection, CollectionKind, Coupon, Order, OrderStatus, Product, Settings, Subscriber } from "./types";
+import type { Collection, CollectionKind, Coupon, Department, Order, OrderStatus, Product, Settings, Subscriber } from "./types";
 import { seedCollections, seedCoupons, seedProducts, seedSettings } from "./seed";
+import { destroyByUrl } from "./cloudinary";
 
 /**
  * MongoDB data layer (works on Vercel serverless — no local disk).
@@ -49,16 +50,16 @@ async function getClient(): Promise<MongoClient> {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const toDoc = <T extends { id: string }>(x: T): any => {
+export const toDoc = <T extends { id: string }>(x: T): any => {
   const { id, ...rest } = x;
   return { _id: id, ...rest };
 };
-const fromDoc = <T>(d: any): T => {
+export const fromDoc = <T>(d: any): T => {
   const { _id, ...rest } = d;
   return { id: _id, ...rest } as T;
 };
 const isDup = (e: unknown) => (e as { code?: number })?.code === 11000;
-const newId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+export const newId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
 
 async function init(d: Db) {
   const c = (name: string) => d.collection<any>(name);
@@ -85,6 +86,36 @@ async function init(d: Db) {
       throw e;
     }
   }
+  await migrate(d);
+}
+
+/**
+ * One-time, idempotent upgrade of databases created by older versions:
+ *   v2 — departments (women/men/kids/accessories), per-product size lists, new department collections.
+ * The version claim is atomic, so concurrent serverless instances can't run it twice.
+ */
+const SCHEMA_VERSION = 2;
+async function migrate(d: Db) {
+  const c = (name: string) => d.collection<any>(name);
+  await c("meta").updateOne({ _id: "schema" }, { $setOnInsert: { v: 0 } }, { upsert: true });
+  const claim = await c("meta").updateOne({ _id: "schema", v: { $lt: SCHEMA_VERSION } }, { $set: { v: SCHEMA_VERSION, at: new Date() } });
+  if (claim.modifiedCount !== 1) return;
+  try {
+    await c("products").updateMany({ department: { $exists: false } }, { $set: { department: "women" } });
+    await c("products").updateMany({ sizes: { $exists: false } }, [
+      { $set: { sizes: { $cond: [{ $and: [{ $eq: [{ $type: "$size" }, "string"] }, { $ne: ["$size", ""] }] }, ["$size"], ["Free size"]] } } },
+      { $unset: "size" },
+    ]);
+    await c("collections").updateMany({ department: { $exists: false }, kind: "collection" }, { $set: { department: "women" } });
+    await c("collections").updateMany({ department: { $exists: false } }, { $set: { department: "" } });
+    for (const col of seedCollections()) {
+      const { id, ...rest } = col;
+      await c("collections").updateOne({ kind: col.kind, slug: col.slug }, { $setOnInsert: { _id: id, ...rest } }, { upsert: true });
+    }
+  } catch (e) {
+    await c("meta").updateOne({ _id: "schema" }, { $set: { v: 0 } }); // let the next start retry
+    throw e;
+  }
 }
 
 async function db(): Promise<Db> {
@@ -101,7 +132,7 @@ async function db(): Promise<Db> {
   return g._stDb;
 }
 
-const col = async (name: string) => (await db()).collection<any>(name);
+export const col = async (name: string) => (await db()).collection<any>(name);
 
 /* ---------------- Images (stored in MongoDB) ---------------- */
 export async function saveImage(data: Buffer, contentType: string): Promise<string> {
@@ -115,18 +146,32 @@ export async function getImage(id: string): Promise<{ contentType: string; data:
   return doc ? { contentType: doc.contentType, data: Buffer.from(doc.data.buffer) } : null;
 }
 
-/** Delete uploaded images that nothing references any more (keeps the free Atlas tier from filling up). */
-async function pruneImages(urls: string[]) {
-  const candidates = [...new Set(urls)].filter((u) => u.startsWith("/uploads/"));
-  const [products, collections, images] = await Promise.all([col("products"), col("collections"), col("images")]);
+/** Remove one stored image from wherever it lives (MongoDB fallback store, or this environment's Cloudinary folder). */
+async function deleteStoredImage(url: string) {
+  if (url.startsWith("/uploads/")) {
+    await (await col("images")).deleteOne({ _id: url.slice("/uploads/".length) });
+  } else if (url.startsWith("https://res.cloudinary.com/")) {
+    try {
+      await destroyByUrl(url);
+    } catch (e) {
+      console.warn("[images] Cloudinary delete failed:", (e as Error).message); // never block a save/delete on cleanup
+    }
+  }
+}
+
+/** Delete uploaded images that nothing references any more (keeps storage tidy and free tiers from filling up). */
+export async function pruneImages(urls: string[]) {
+  const candidates = [...new Set(urls)].filter((u) => u.startsWith("/uploads/") || u.startsWith("https://res.cloudinary.com/"));
+  if (!candidates.length) return;
+  const [products, collections] = await Promise.all([col("products"), col("collections")]);
   for (const url of candidates) {
     const used =
       (await products.countDocuments({ $or: [{ images: url }, { "colors.image": url }] }, { limit: 1 })) +
       (await collections.countDocuments({ image: url }, { limit: 1 }));
-    if (!used) await images.deleteOne({ _id: url.slice("/uploads/".length) });
+    if (!used) await deleteStoredImage(url);
   }
 }
-const productImages = (p: Pick<Product, "images" | "colors">) => [...p.images, ...p.colors.map((c) => c.image)];
+const productImages = (p: Pick<Product, "images" | "colors">) => [...(p.images ?? []), ...(p.colors ?? []).map((c) => c.image)];
 
 /* ---------------- Products ---------------- */
 export async function listProducts(opts: { includeInactive?: boolean } = {}): Promise<Product[]> {
@@ -178,10 +223,57 @@ export async function deleteProduct(id: string): Promise<boolean> {
   return true;
 }
 
+export async function duplicateProduct(id: string): Promise<Product | undefined> {
+  const src = await getProduct(id);
+  if (!src) return undefined;
+  const { id: _id, createdAt: _c, slug, name, ...rest } = src;
+  void _id; void _c;
+  return saveProduct({ ...rest, name: `${name} (Copy)`, slug: `${slug}-copy`, active: false, sku: undefined });
+}
+
+export type BulkAction =
+  | { action: "activate" | "deactivate" | "delete" }
+  | { action: "discount"; percent: number }
+  | { action: "department"; department: Department }
+  | { action: "collection" | "fabric" | "occasion"; value: string }
+  | { action: "trending" | "isNew"; value: boolean }
+  | { action: "stock"; value: number };
+
+/** Apply one change to many products at once. Returns how many were affected. */
+export async function bulkUpdateProducts(ids: string[], op: BulkAction): Promise<number> {
+  const products = await col("products");
+  const filter = { _id: { $in: ids } };
+  switch (op.action) {
+    case "delete": {
+      const docs = await products.find(filter).toArray();
+      const res = await products.deleteMany(filter);
+      await pruneImages(docs.flatMap((d) => productImages(fromDoc<Product>(d))));
+      return res.deletedCount;
+    }
+    case "activate":
+    case "deactivate":
+      return (await products.updateMany(filter, { $set: { active: op.action === "activate" } })).matchedCount;
+    case "discount":
+      return (await products.updateMany(filter, { $set: { discountPercent: Math.min(90, Math.max(0, op.percent)) } })).matchedCount;
+    case "department":
+      return (await products.updateMany(filter, { $set: { department: op.department } })).matchedCount;
+    case "collection":
+    case "fabric":
+    case "occasion":
+      return (await products.updateMany(filter, { $set: { [op.action]: op.value } })).matchedCount;
+    case "trending":
+    case "isNew":
+      return (await products.updateMany(filter, { $set: { [op.action]: op.value } })).matchedCount;
+    case "stock":
+      return (await products.updateMany(filter, { $set: { stock: Math.max(0, Math.round(op.value)) } })).matchedCount;
+  }
+}
+
 /* ---------------- Collections (admin-managed shop-by groups) ---------------- */
-export async function listCollections(kind?: CollectionKind, opts: { includeInactive?: boolean } = {}): Promise<Collection[]> {
+export async function listCollections(kind?: CollectionKind, opts: { includeInactive?: boolean; department?: Department } = {}): Promise<Collection[]> {
   const filter: any = {};
   if (kind) filter.kind = kind;
+  if (opts.department) filter.department = { $in: [opts.department, ""] };
   if (!opts.includeInactive) filter.active = true;
   const docs = await (await col("collections")).find(filter).sort({ sort: 1, name: 1 }).toArray();
   return docs.map((d) => fromDoc<Collection>(d));
@@ -326,6 +418,10 @@ export async function setOrderStatus(id: string, status: OrderStatus): Promise<O
   }
   await orders.updateOne({ _id: id }, { $set: { status } });
   return { ...order, status };
+}
+
+export async function setOrderNote(id: string, note: string): Promise<boolean> {
+  return (await (await col("orders")).updateOne({ _id: id }, { $set: { adminNote: note.slice(0, 1000) } })).matchedCount === 1;
 }
 
 export async function deleteOrder(id: string): Promise<boolean> {

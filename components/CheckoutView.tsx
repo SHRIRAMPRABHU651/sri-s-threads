@@ -10,7 +10,7 @@ import CouponBox from "./CouponBox";
 type Done = { number: string; url: string; total: number };
 
 export default function CheckoutView() {
-  const { ready, catalog, lines, product, subtotal, couponCode, setCoupon, clear } = useStore();
+  const { ready, loading, lines, product, subtotal, couponCode, setCoupon, clear } = useStore();
   const coupon = useCouponCheck(couponCode, lines);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +29,7 @@ export default function CheckoutView() {
       </div>
     );
 
-  if (!ready || (lines.length > 0 && catalog.length === 0)) return <p className="empty">Loading…</p>;
+  if (!ready || (lines.length > 0 && loading && lines.some((l) => !product(l.productId)))) return <p className="empty">Loading…</p>;
   if (lines.length === 0)
     return (
       <div className="empty">
@@ -101,8 +101,8 @@ export default function CheckoutView() {
           const p = product(l.productId);
           if (!p) return null;
           return (
-            <div className="summary__row" key={`${l.productId}-${l.color ?? ""}`}>
-              <span>{p.name}{l.color ? ` (${l.color})` : ""} × {l.qty}</span>
+            <div className="summary__row" key={`${l.productId}-${l.color ?? ""}-${l.size ?? ""}`}>
+              <span>{p.name}{[l.color, l.size].filter(Boolean).length ? ` (${[l.color, l.size && `Size ${l.size}`].filter(Boolean).join(", ")})` : ""} × {l.qty}</span>
               <span>{inr(salePrice(p) * l.qty)}</span>
             </div>
           );

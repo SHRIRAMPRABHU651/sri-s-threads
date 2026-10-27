@@ -1,5 +1,5 @@
 import { bool, num, str } from "./api";
-import { slugify } from "./shared";
+import { isDepartment, slugify } from "./shared";
 import type { Collection, Product } from "./types";
 
 type Input = Omit<Product, "id" | "createdAt">;
@@ -22,7 +22,11 @@ export function parseProduct(body: Record<string, unknown>, groups: Collection[]
         .slice(0, 10)
     : [];
 
-  const pick = (v: unknown, kind: Collection["kind"]) => (groups.some((g) => g.kind === kind && g.slug === v) ? String(v) : "");
+  const department = isDepartment(body.department) ? body.department : "women";
+  // a collection must exist AND belong to the product's department; fabric / occasion are shared by all departments
+  const pick = (v: unknown, kind: Collection["kind"]) =>
+    groups.some((g) => g.kind === kind && g.slug === v && (kind !== "collection" || g.department === department)) ? String(v) : "";
+  const sizes = [...new Set((Array.isArray(body.sizes) ? body.sizes : []).map((x) => str(x, 20)).filter(Boolean))].slice(0, 20);
   const saleEnds = str(body.saleEndsAt, 40);
 
   return {
@@ -35,7 +39,9 @@ export function parseProduct(body: Record<string, unknown>, groups: Collection[]
     discountPercent,
     images,
     colors,
-    size: str(body.size, 60) || "Free size",
+    sizes: sizes.length ? sizes : ["Free size"],
+    department,
+    sku: str(body.sku, 40) || undefined,
     collection: pick(body.collection, "collection"),
     fabric: pick(body.fabric, "fabric"),
     occasion: pick(body.occasion, "occasion"),

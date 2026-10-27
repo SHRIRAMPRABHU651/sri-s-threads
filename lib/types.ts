@@ -1,3 +1,5 @@
+export type Department = "women" | "men" | "kids" | "accessories";
+
 export type ProductColor = { name: string; image: string };
 
 export type Product = {
@@ -7,12 +9,15 @@ export type Product = {
   description: string;
   details: string;
   care: string;
+  sku?: string;
   mrp: number;
   /** 0-90. Sale price = mrp reduced by this percentage. */
   discountPercent: number;
   images: string[];
   colors: ProductColor[];
-  size: string;
+  /** Sizes the customer can choose from, e.g. ["S","M","L"], ["Free size"], ["2-3Y","4-5Y"]. */
+  sizes: string[];
+  department: Department;
   collection: string;
   fabric: string;
   occasion: string;
@@ -47,6 +52,7 @@ export type OrderItem = {
   name: string;
   image: string;
   color?: string;
+  size?: string;
   qty: number;
   price: number;
   mrp: number;
@@ -73,6 +79,8 @@ export type Order = {
   couponCode?: string;
   total: number;
   status: OrderStatus;
+  /** Private note from the shop owner (not shown to the customer). */
+  adminNote?: string;
 };
 
 export type Settings = {
@@ -97,7 +105,9 @@ export type Collection = {
   slug: string;
   name: string;
   image: string;
-  /** Collections only: show on the home page "Sri's Threads" section. */
+  /** Which department a "collection" belongs to. Empty = shown in every department (fabric / occasion). */
+  department: Department | "";
+  /** Collections only: show on the home page category section. */
   featured: boolean;
   active: boolean;
   sort: number;
@@ -107,4 +117,5 @@ export type CartLine = {
   productId: string;
   qty: number;
   color?: string;
+  size?: string;
 };

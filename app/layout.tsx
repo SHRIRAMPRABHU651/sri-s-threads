@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Loader from "@/components/Loader";
 import { StoreProvider } from "@/components/Store";
+import MotionProvider from "@/components/motion/MotionProvider";
 import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: skipLoader }} />
+        <noscript><style>{"[data-reveal]{opacity:1!important;transform:none!important;filter:none!important}"}</style></noscript>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -29,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Loader />
-        <StoreProvider>{children}</StoreProvider>
+        <MotionProvider><StoreProvider>{children}</StoreProvider></MotionProvider>
       </body>
     </html>
   );

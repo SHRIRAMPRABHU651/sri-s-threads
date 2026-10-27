@@ -1,4 +1,6 @@
 import Link from "next/link";
+import SmartImg from "./SmartImg";
+import { Stagger, StaggerItem } from "./motion/Reveal";
 
 export type CollectionCard = { slug: string; name: string; image: string };
 
@@ -13,16 +15,17 @@ export default function CollectionGrid({
   variant?: "3" | "2";
 }) {
   return (
-    <div className={`collection-grid${variant ? ` collection-grid--${variant}` : ""}`}>
+    <Stagger className={`collection-grid${variant ? ` collection-grid--${variant}` : ""}`} gap={0.09}>
       {cards.map((c) => (
-        <Link key={c.slug} href={hrefFor(c)} className="collection-card">
-          <div className="collection-card__arch">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={c.image} alt="" loading="lazy" />
-          </div>
-          <span className="collection-card__label">{c.name}</span>
-        </Link>
+        <StaggerItem key={c.slug}>
+          <Link href={hrefFor(c)} className="collection-card">
+            <div className="collection-card__arch">
+              <SmartImg src={c.image} alt="" w={600} sizes="(max-width: 640px) 45vw, 260px" />
+            </div>
+            <span className="collection-card__label">{c.name}</span>
+          </Link>
+        </StaggerItem>
       ))}
-    </div>
+    </Stagger>
   );
 }
