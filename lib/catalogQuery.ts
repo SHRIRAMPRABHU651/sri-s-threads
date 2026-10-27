@@ -1,4 +1,4 @@
-import { DEPARTMENTS, SORTS, type SortValue } from "./shared";
+import { SORTS, type SortValue } from "./shared";
 import type { Department } from "./types";
 
 /** Shop-list filters. Lives in the URL so every filtered view is shareable and back-button friendly. */
@@ -36,7 +36,7 @@ export function parseCatalogQuery(sp: SP): CatalogQuery {
   const dept = first(sp, "department");
   const sort = first(sp, "sort");
   const q: CatalogQuery = {
-    department: DEPARTMENTS.some((d) => d.slug === dept) ? (dept as Department) : undefined,
+    department: dept && /^[a-z0-9-]{1,40}$/.test(dept) ? (dept as Department) : undefined,
     q: first(sp, "q")?.slice(0, 80),
     collections: all(sp, "collection").slice(0, 20),
     fabrics: all(sp, "fabric").slice(0, 20),

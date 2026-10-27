@@ -6,14 +6,14 @@ import ProductView, { type Crumb } from "@/components/ProductView";
 import SectionTitle from "@/components/SectionTitle";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { queryProducts } from "@/lib/catalog";
-import { getProduct, getSettings, listCollections, listCoupons } from "@/lib/db";
+import { getProduct, getSettings, listCollections, listCoupons, listDepartments } from "@/lib/db";
 import { departmentLabel } from "@/lib/shared";
 import { whatsappUrl } from "@/lib/whatsapp";
 import { optimizeImage } from "@/lib/imageUrl";
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const p = await getProduct(params.slug);
-  if (!p || !p.active) return { title: "Product not found" };
+  if (!p || !p.active || !(await listDepartments()).some((d) => d.slug === p.department)) return { title: "Product not found" };
   return {
     title: p.name,
     description: p.description?.slice(0, 160),
@@ -23,7 +23,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const product = await getProduct(params.slug);
-  if (!product || !product.active) notFound();
+  const depts = await listDepartments();
+  if (!product || !product.active || !depts.some((d) => d.slug === product.department)) notFound();
   const now = Date.now();
   const [couponsAll, groups, settings, related] = await Promise.all([
     listCoupons(),
@@ -39,7 +40,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
   const col = groups.find((g) => g.kind === "collection" && g.slug === product.collection);
   const crumbs: Crumb[] = [
     { label: "Home", href: "/" },
-    { label: departmentLabel(product.department), href: `/${product.department}` },
+    { label: departmentLabel(product.department, depts), href: `/${product.department}` },
     ...(col ? [{ label: col.name, href: `/shop?collection=${col.slug}` }] : []),
     { label: product.name },
   ];
@@ -55,7 +56,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
           <Stagger className="product-grid">
             {more.map((p) => <StaggerItem key={p.id}><ProductCard p={p} /></StaggerItem>)}
           </Stagger>
-          <Reveal className="center"><Link href={`/shop?department=${product.department}`} className="btn btn--outline">View all {departmentLabel(product.department)}</Link></Reveal>
+          <Reveal className="center"><Link href={`/shop?department=${product.department}`} className="btn btn--outline">View all {departmentLabel(product.department, depts)}</Link></Reveal>
         </section>
       )}
     </>

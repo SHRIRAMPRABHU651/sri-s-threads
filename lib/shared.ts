@@ -1,16 +1,20 @@
-import type { Coupon, Department, Product } from "./types";
+import type { Coupon, Department, DepartmentDef, Product } from "./types";
 
 export const BRAND = "Sri's Threads";
 
-export const DEPARTMENTS: { slug: Department; label: string; blurb: string; image: string; sizes: string[] }[] = [
-  { slug: "women", label: "Women", blurb: "Sarees, chudidhar, kurtis, lehengas & more", image: "/assets/img/collection-1.webp", sizes: ["Free size", "XS", "S", "M", "L", "XL", "XXL"] },
-  { slug: "men", label: "Men", blurb: "Kurtas, sherwanis, jackets & festive sets", image: "/assets/img/dept-men.webp", sizes: ["S", "M", "L", "XL", "XXL", "3XL"] },
-  { slug: "kids", label: "Kids", blurb: "Festive and everyday ethnic wear for little ones", image: "/assets/img/dept-kids.webp", sizes: ["0-1Y", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y", "12-13Y"] },
-  { slug: "accessories", label: "Accessories", blurb: "Jewellery, bags, dupattas, footwear & more", image: "/assets/img/dept-accessories.webp", sizes: ["Free size"] },
+/** Starter departments, written to the database the first time. After that they are managed in Admin → Departments. */
+export const DEFAULT_DEPARTMENTS: DepartmentDef[] = [
+  { slug: "women", label: "Women", blurb: "Sarees, chudidhar, kurtis, lehengas & more", image: "/assets/img/collection-1.webp", sizes: ["Free size", "XS", "S", "M", "L", "XL", "XXL"], active: true, sort: 10 },
+  { slug: "men", label: "Men", blurb: "Kurtas, sherwanis, jackets & festive sets", image: "/assets/img/dept-men.webp", sizes: ["S", "M", "L", "XL", "XXL", "3XL"], active: true, sort: 20 },
+  { slug: "kids", label: "Kids", blurb: "Festive and everyday ethnic wear for little ones", image: "/assets/img/dept-kids.webp", sizes: ["0-1Y", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y", "12-13Y"], active: true, sort: 30 },
+  { slug: "accessories", label: "Accessories", blurb: "Jewellery, bags, dupattas, footwear & more", image: "/assets/img/dept-accessories.webp", sizes: ["Free size"], active: true, sort: 40 },
 ];
 
-export const isDepartment = (v: unknown): v is Department => DEPARTMENTS.some((d) => d.slug === v);
-export const departmentLabel = (slug: string) => DEPARTMENTS.find((d) => d.slug === slug)?.label ?? slug;
+/** URL segments a department slug may never use (they are real pages / routes). */
+export const RESERVED_SLUGS = ["shop", "cart", "checkout", "wishlist", "collections", "product", "admin", "api", "uploads", "sitemap", "robots", "icon", "apple-icon", "assets", "new", "sale"];
+
+export const isDepartment = (v: unknown, list: Pick<DepartmentDef, "slug">[]): v is Department => typeof v === "string" && list.some((d) => d.slug === v);
+export const departmentLabel = (slug: string, list: Pick<DepartmentDef, "slug" | "label">[] = DEFAULT_DEPARTMENTS) => list.find((d) => d.slug === slug)?.label ?? slug;
 
 export const COLLECTION_KINDS = [
   { kind: "collection", title: "Top Collection", path: "/collections", param: "collection" },

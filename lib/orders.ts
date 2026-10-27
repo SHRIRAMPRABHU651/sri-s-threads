@@ -1,7 +1,7 @@
 import "server-only";
 import type { CartLine, Order } from "./types";
 import { evaluateCoupon, salePrice } from "./shared";
-import { getCouponByCode, getProductsByIds, insertOrder, releaseCoupon, releaseStock, reserveCoupon, reserveStock } from "./db";
+import { activeDepartmentSlugs, getCouponByCode, getProductsByIds, insertOrder, releaseCoupon, releaseStock, reserveCoupon, reserveStock } from "./db";
 
 export type OrderInput = {
   customer: Order["customer"];
@@ -15,12 +15,12 @@ export type OrderInput = {
  */
 export async function placeOrder(input: OrderInput): Promise<Order | { error: string }> {
   const ids = [...new Set(input.lines.map((l) => l.productId))];
-  const products = await getProductsByIds(ids);
+  const [products, liveDepts] = await Promise.all([getProductsByIds(ids), activeDepartmentSlugs()]);
 
   const items: Order["items"] = [];
   for (const l of input.lines) {
     const p = products.find((x) => x.id === l.productId);
-    if (!p || !p.active) return { error: "One of the items in your bag is no longer available." };
+    if (!p || !p.active || !liveDepts.includes(p.department)) return { error: "One of the items in your bag is no longer available." };
     const color = l.color || undefined;
     if (color && p.colors.length && !p.colors.some((c) => c.name === color)) return { error: `${p.name} is no longer available in ${color}.` };
     // sizes: required when there is a choice, otherwise implied

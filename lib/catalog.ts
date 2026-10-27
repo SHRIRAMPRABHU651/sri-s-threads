@@ -1,6 +1,7 @@
 import "server-only";
 import { col, fromDoc } from "./db";
-import { DEPARTMENTS, PAGE_SIZE } from "./shared";
+import { PAGE_SIZE } from "./shared";
+import { listDepartments } from "./db";
 import type { CatalogQuery } from "./catalogQuery";
 import type { Product } from "./types";
 
@@ -25,9 +26,10 @@ export type CatalogResult = {
 const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Filter clauses. `except` leaves one filter out so its own facet counts stay meaningful while you tick options. */
-function clauses(q: CatalogQuery, except: string[] = []): any[] {
+function clauses(q: CatalogQuery, live: string[], except: string[] = []): any[] {
   const use = (k: string) => !except.includes(k);
-  const c: any[] = [{ active: true }];
+  // products in a department the admin switched off are invisible everywhere
+  const c: any[] = [{ active: true }, { department: { $in: live } }];
   if (q.q?.trim()) {
     const rx = new RegExp(escapeRx(q.q.trim()), "i");
     c.push({ $or: [{ name: rx }, { description: rx }, { sku: rx }] });
@@ -47,7 +49,7 @@ function clauses(q: CatalogQuery, except: string[] = []): any[] {
   if (use("new") && q.isNew) c.push({ isNew: true });
   return c;
 }
-const match = (q: CatalogQuery, except: string[] = []) => ({ $match: { $and: clauses(q, except) } });
+const match = (q: CatalogQuery, live: string[], except: string[] = []) => ({ $match: { $and: clauses(q, live, except) } });
 
 const SORT_STAGES: Record<string, any> = {
   featured: { trending: -1, createdAt: -1, _id: 1 },
@@ -61,13 +63,14 @@ const SORT_STAGES: Record<string, any> = {
 const groupBy = (field: string) => [{ $group: { _id: field, n: { $sum: 1 } } }];
 const toCounts = (rows: { _id: string; n: number }[]): Count[] => rows.filter((r) => r._id).map((r) => ({ name: r._id, count: r.n }));
 
-/** Canonical size ordering so "S, M, L, XL" never shows up as "L, M, S, XL". */
-const SIZE_ORDER = [...new Set(DEPARTMENTS.flatMap((d) => d.sizes))];
-const sizeRank = (s: string) => { const i = SIZE_ORDER.indexOf(s); return i === -1 ? 999 : i; };
+/** Canonical size ordering (as listed in the departments) so "S, M, L, XL" never shows up as "L, M, S, XL". */
+const sizeRanker = (order: string[]) => (s: string) => { const i = order.indexOf(s); return i === -1 ? 999 : i; };
 
 export async function queryProducts(q: CatalogQuery): Promise<CatalogResult> {
   const page = Math.max(1, q.page ?? 1);
-  const products = await col("products");
+  const [products, allDepts] = await Promise.all([col("products"), listDepartments(true)]);
+  const live = allDepts.filter((d) => d.active).map((d) => d.slug);
+  const sizeRank = sizeRanker([...new Set(allDepts.flatMap((d) => d.sizes))]);
   const price = { $addFields: { price: { $round: [{ $multiply: ["$mrp", { $subtract: [1, { $divide: [{ $ifNull: ["$discountPercent", 0] }, 100] }] }] }, 0] } } };
 
   const [res] = await products
@@ -76,15 +79,15 @@ export async function queryProducts(q: CatalogQuery): Promise<CatalogResult> {
         price,
         {
           $facet: {
-            items: [match(q), { $sort: SORT_STAGES[q.sort ?? "featured"] }, { $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE }, { $project: { details: 0, care: 0, price: 0 } }],
-            total: [match(q), { $count: "n" }],
-            price: [match(q, ["price"]), { $group: { _id: null, min: { $min: "$price" }, max: { $max: "$price" } } }],
-            sizes: [match(q, ["size"]), { $unwind: "$sizes" }, ...groupBy("$sizes")],
-            colors: [match(q, ["color"]), { $unwind: "$colors" }, ...groupBy("$colors.name")],
-            collections: [match(q, ["collection"]), ...groupBy("$collection")],
-            fabrics: [match(q, ["fabric"]), ...groupBy("$fabric")],
-            occasions: [match(q, ["occasion"]), ...groupBy("$occasion")],
-            departments: [match(q, ["department"]), ...groupBy("$department")],
+            items: [match(q, live), { $sort: SORT_STAGES[q.sort ?? "featured"] }, { $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE }, { $project: { details: 0, care: 0, price: 0 } }],
+            total: [match(q, live), { $count: "n" }],
+            price: [match(q, live, ["price"]), { $group: { _id: null, min: { $min: "$price" }, max: { $max: "$price" } } }],
+            sizes: [match(q, live, ["size"]), { $unwind: "$sizes" }, ...groupBy("$sizes")],
+            colors: [match(q, live, ["color"]), { $unwind: "$colors" }, ...groupBy("$colors.name")],
+            collections: [match(q, live, ["collection"]), ...groupBy("$collection")],
+            fabrics: [match(q, live, ["fabric"]), ...groupBy("$fabric")],
+            occasions: [match(q, live, ["occasion"]), ...groupBy("$occasion")],
+            departments: [match(q, live, ["department"]), ...groupBy("$department")],
           },
         },
       ],

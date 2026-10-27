@@ -1,21 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Collection, Coupon, Order, Product } from "@/lib/types";
+import type { Collection, Coupon, DepartmentDef, Order, Product } from "@/lib/types";
 import { Emblem } from "../Logo";
 import { api } from "./api";
 import CollectionsTab from "./CollectionsTab";
 import CouponsTab from "./CouponsTab";
 import CustomersTab from "./CustomersTab";
+import DepartmentsTab from "./DepartmentsTab";
 import OverviewTab from "./OverviewTab";
 import OrdersTab from "./OrdersTab";
 import ProductsTab from "./ProductsTab";
 import SettingsTab from "./SettingsTab";
 
-type Tab = "overview" | "products" | "collections" | "coupons" | "orders" | "customers" | "settings";
+type Tab = "overview" | "products" | "departments" | "collections" | "coupons" | "orders" | "customers" | "settings";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "products", label: "Products" },
+  { id: "departments", label: "Departments" },
   { id: "collections", label: "Collections" },
   { id: "coupons", label: "Coupons" },
   { id: "orders", label: "Orders" },
@@ -32,21 +34,24 @@ export default function AdminApp() {
   }, []);
   const [products, setProducts] = useState<Product[]>([]);
   const [groups, setGroups] = useState<Collection[]>([]);
+  const [departments, setDepartments] = useState<DepartmentDef[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const [p, g, c, o] = await Promise.all([
+    const [p, g, c, o, dp] = await Promise.all([
       api<Product[]>("/api/products?all=1"),
       api<Collection[]>("/api/collections?all=1"),
       api<Coupon[]>("/api/coupons"),
       api<Order[]>("/api/orders"),
+      api<DepartmentDef[]>("/api/departments?all=1"),
     ]);
     if (p.ok) setProducts(p.data);
     if (g.ok) setGroups(g.data);
     if (c.ok) setCoupons(c.data);
     if (o.ok) setOrders(o.data);
+    if (dp.ok) setDepartments(dp.data);
     setLoaded(true);
   }, []);
   useEffect(() => { reload(); }, [reload]);
@@ -83,8 +88,9 @@ export default function AdminApp() {
         {!loaded ? <p className="a-mute">Loading…</p> : (
           <>
             {tab === "overview" && <OverviewTab onGo={(t) => setTab(t as Tab)} />}
-            {tab === "products" && <ProductsTab products={products} groups={groups} reload={reload} />}
-            {tab === "collections" && <CollectionsTab groups={groups} counts={counts} reload={reload} />}
+            {tab === "products" && <ProductsTab products={products} groups={groups} departments={departments} reload={reload} />}
+            {tab === "departments" && <DepartmentsTab departments={departments} products={products} groups={groups} reload={reload} />}
+            {tab === "collections" && <CollectionsTab groups={groups} counts={counts} departments={departments} reload={reload} />}
             {tab === "coupons" && <CouponsTab coupons={coupons} reload={reload} />}
             {tab === "orders" && <OrdersTab orders={orders} reload={reload} />}
             {tab === "customers" && <CustomersTab />}

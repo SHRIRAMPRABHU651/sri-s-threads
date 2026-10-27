@@ -9,18 +9,18 @@ import { ParallaxBlock } from "@/components/motion/Parallax";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import SmartImg from "@/components/SmartImg";
 import { queryProducts } from "@/lib/catalog";
-import { getSettings, listCollections } from "@/lib/db";
-import { DEPARTMENTS, isDepartment } from "@/lib/shared";
+import { getSettings, listCollections, listDepartments } from "@/lib/db";
 import { whatsappUrl } from "@/lib/whatsapp";
 
-export function generateMetadata({ params }: { params: { department: string } }): Metadata {
-  const d = DEPARTMENTS.find((x) => x.slug === params.department);
+export async function generateMetadata({ params }: { params: { department: string } }): Promise<Metadata> {
+  const d = (await listDepartments()).find((x) => x.slug === params.department);
   return d ? { title: `${d.label}'s Ethnic Wear`.replace("Women's", "Women's").replace("Accessories's", "Accessories"), description: d.blurb } : { title: "Not found" };
 }
 
 export default async function DepartmentPage({ params }: { params: { department: string } }) {
-  if (!isDepartment(params.department)) notFound();
-  const dept = DEPARTMENTS.find((d) => d.slug === params.department)!;
+  // a department that is switched off (or doesn't exist) is a 404 — nothing about it is public
+  const dept = (await listDepartments()).find((d) => d.slug === params.department);
+  if (!dept) notFound();
   const [collections, fresh, popular, settings] = await Promise.all([
     listCollections("collection", { department: dept.slug }),
     queryProducts({ department: dept.slug, sort: "new", page: 1 }),

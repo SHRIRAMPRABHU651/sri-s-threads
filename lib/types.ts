@@ -1,4 +1,18 @@
-export type Department = "women" | "men" | "kids" | "accessories";
+/** Slug of an admin-managed department (e.g. "women", "men", "kids"). */
+export type Department = string;
+
+/** A top-level section of the store. Fully managed from the admin: name, blurb, picture, sizes, on/off and order. */
+export type DepartmentDef = {
+  slug: string;
+  label: string;
+  blurb: string;
+  image: string;
+  /** Size options offered when adding a product in this department. */
+  sizes: string[];
+  /** Off = hidden from the whole storefront (menu, home, shop, product pages) but nothing is deleted. */
+  active: boolean;
+  sort: number;
+};
 
 export type ProductColor = { name: string; image: string };
 
@@ -106,7 +120,7 @@ export type Collection = {
   name: string;
   image: string;
   /** Which department a "collection" belongs to. Empty = shown in every department (fabric / occasion). */
-  department: Department | "";
+  department: string;
   /** Collections only: show on the home page category section. */
   featured: boolean;
   active: boolean;

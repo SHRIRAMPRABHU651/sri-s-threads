@@ -5,6 +5,8 @@ import { imageSrcSet, isCloudinaryUrl, optimizeImage } from "../lib/imageUrl";
 import { parseCatalogQuery, toSearchParams, hasActiveFilters } from "../lib/catalogQuery";
 import { evaluateCoupon, salePrice } from "../lib/shared";
 import { parseProduct } from "../lib/productInput";
+import { parseDepartment } from "../lib/departmentInput";
+import { DEFAULT_DEPARTMENTS, departmentLabel, isDepartment } from "../lib/shared";
 import type { Collection, Coupon } from "../lib/types";
 
 const withEnv = (vars: Record<string, string | undefined>, fn: () => void) => {
@@ -81,7 +83,10 @@ test("optimizeImage / imageSrcSet only touch Cloudinary URLs", () => {
 /* ---------- shop query ---------- */
 test("parseCatalogQuery is forgiving and clamps bad input", () => {
   const q = parseCatalogQuery(new URLSearchParams("department=foo&min=abc&page=-3&sort=hack&collection=a&collection=b&stock=1&discount=30"));
-  assert.equal(q.department, undefined);
+  // unknown departments pass through (the catalogue only matches live ones, so they simply return nothing)…
+  assert.equal(q.department, "foo");
+  // …but anything that is not a plain slug is dropped
+  assert.equal(parseCatalogQuery(new URLSearchParams("department=../x%20y")).department, undefined);
   assert.equal(q.priceMin, undefined);
   assert.equal(q.page, 1);
   assert.equal(q.sort, "featured");
@@ -128,7 +133,7 @@ const groups: Collection[] = [
   { id: "3", kind: "fabric", slug: "silk", name: "Silk", image: "x", department: "", featured: false, active: true, sort: 1 },
 ];
 test("parseProduct: department-aware collection, sizes and clamps", () => {
-  const r = parseProduct({ name: "Test", mrp: 1000, discountPercent: 150, images: ["/a.jpg"], department: "men", collection: "kurtas", fabric: "silk", sizes: ["S", "M", "S", ""] }, groups);
+  const r = parseProduct({ name: "Test", mrp: 1000, discountPercent: 150, images: ["/a.jpg"], department: "men", collection: "kurtas", fabric: "silk", sizes: ["S", "M", "S", ""] }, groups, DEFAULT_DEPARTMENTS);
   assert.ok(!("error" in r));
   if ("error" in r) return;
   assert.equal(r.department, "men");
@@ -137,11 +142,36 @@ test("parseProduct: department-aware collection, sizes and clamps", () => {
   assert.deepEqual(r.sizes, ["S", "M"]);
   assert.equal(r.discountPercent, 90);
   // a men's product can't be filed under a women's collection
-  const bad = parseProduct({ name: "Test", mrp: 1000, images: ["/a.jpg"], department: "men", collection: "sarees" }, groups);
+  const bad = parseProduct({ name: "Test", mrp: 1000, images: ["/a.jpg"], department: "men", collection: "sarees" }, groups, DEFAULT_DEPARTMENTS);
   assert.ok(!("error" in bad) && bad.collection === "");
-  assert.ok("error" in parseProduct({ name: "x", mrp: 1000, images: ["/a.jpg"] }, groups));
-  assert.ok("error" in parseProduct({ name: "Ok", mrp: 0, images: ["/a.jpg"] }, groups));
-  assert.ok("error" in parseProduct({ name: "Ok", mrp: 10, images: [] }, groups));
-  const defaults = parseProduct({ name: "Ok", mrp: 10, images: ["/a.jpg"] }, groups);
-  assert.ok(!("error" in defaults) && defaults.department === "women" && defaults.sizes[0] === "Free size");
+  assert.ok("error" in parseProduct({ name: "x", mrp: 1000, images: ["/a.jpg"], department: "women" }, groups, DEFAULT_DEPARTMENTS));
+  assert.ok("error" in parseProduct({ name: "Ok", mrp: 0, images: ["/a.jpg"], department: "women" }, groups, DEFAULT_DEPARTMENTS));
+  assert.ok("error" in parseProduct({ name: "Ok", mrp: 10, images: [], department: "women" }, groups, DEFAULT_DEPARTMENTS));
+  // a department is required, and must exist
+  assert.ok("error" in parseProduct({ name: "Ok", mrp: 10, images: ["/a.jpg"] }, groups, DEFAULT_DEPARTMENTS));
+  assert.ok("error" in parseProduct({ name: "Ok", mrp: 10, images: ["/a.jpg"], department: "ghost" }, groups, DEFAULT_DEPARTMENTS));
+  const defaults = parseProduct({ name: "Ok", mrp: 10, images: ["/a.jpg"], department: "women" }, groups, DEFAULT_DEPARTMENTS);
+  assert.ok(!("error" in defaults) && defaults.sizes[0] === "Free size");
+});
+
+/* ---------- departments ---------- */
+test("parseDepartment: slug from name, reserved words, sizes", () => {
+  const ok = parseDepartment({ label: "Dhoti & Veshti", image: "/x.webp", sizes: ["M", "L", "M", ""], blurb: "  Traditional  " });
+  assert.ok(!("error" in ok));
+  if ("error" in ok) return;
+  assert.equal(ok.slug, "dhoti-veshti");
+  assert.deepEqual(ok.sizes, ["M", "L"]);
+  assert.equal(ok.blurb, "Traditional");
+  assert.equal(ok.active, true);
+  assert.ok("error" in parseDepartment({ label: "Shop", image: "/x.webp" }), "reserved URL");
+  assert.ok("error" in parseDepartment({ label: "Admin", image: "/x.webp" }));
+  assert.ok("error" in parseDepartment({ label: "A", image: "/x.webp" }), "name too short");
+  assert.ok("error" in parseDepartment({ label: "Fine name" }), "picture required");
+  assert.deepEqual((parseDepartment({ label: "Fine", image: "/x" }) as { sizes: string[] }).sizes, ["Free size"]);
+  assert.equal((parseDepartment({ label: "Fine", image: "/x", active: false }) as { active: boolean }).active, false);
+});
+test("department helpers", () => {
+  assert.ok(isDepartment("men", DEFAULT_DEPARTMENTS) && !isDepartment("ghost", DEFAULT_DEPARTMENTS) && !isDepartment(undefined, DEFAULT_DEPARTMENTS));
+  assert.equal(departmentLabel("kids", DEFAULT_DEPARTMENTS), "Kids");
+  assert.equal(departmentLabel("custom", DEFAULT_DEPARTMENTS), "custom");
 });

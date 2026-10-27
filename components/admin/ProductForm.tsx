@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Collection, Department, Product } from "@/lib/types";
-import { DEPARTMENTS, inr, salePrice } from "@/lib/shared";
+import type { Collection, Department, DepartmentDef, Product } from "@/lib/types";
+import { inr, salePrice } from "@/lib/shared";
 import { api } from "./api";
 import { uploadImage } from "./uploadImage";
 
@@ -25,7 +25,7 @@ const blank: Draft = {
 
 type Upload = { id: number; name: string; pct: number; error?: string };
 
-export default function ProductForm({ product, groups, onClose, onSaved }: { product?: Product; groups: Collection[]; onClose: () => void; onSaved: () => void }) {
+export default function ProductForm({ product, groups, departments, onClose, onSaved }: { product?: Product; groups: Collection[]; departments: DepartmentDef[]; onClose: () => void; onSaved: () => void }) {
   const [d, setD] = useState<Draft>(
     product
       ? {
@@ -35,7 +35,7 @@ export default function ProductForm({ product, groups, onClose, onSaved }: { pro
           isNew: product.isNew, trending: product.trending, active: product.active, saleEndsAt: toLocalInput(product.saleEndsAt),
           images: product.images, colors: product.colors,
         }
-      : blank,
+      : { ...blank, department: departments.find((x) => x.active)?.slug ?? departments[0]?.slug ?? "", sizes: (departments.find((x) => x.active) ?? departments[0])?.sizes.length === 1 ? ["Free size"] : [] },
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,7 +49,7 @@ export default function ProductForm({ product, groups, onClose, onSaved }: { pro
   const mrp = parseFloat(d.mrp) || 0;
   const pct = Math.min(90, Math.max(0, parseFloat(d.discountPercent) || 0));
   const preview = salePrice({ mrp, discountPercent: pct });
-  const dept = DEPARTMENTS.find((x) => x.slug === d.department)!;
+  const dept = departments.find((x) => x.slug === d.department) ?? { label: d.department, sizes: ["Free size"] };
   const collectionOptions = groups.filter((g) => g.kind === "collection" && g.department === d.department);
 
   async function upload(files: FileList | null) {
@@ -103,8 +103,8 @@ export default function ProductForm({ product, groups, onClose, onSaved }: { pro
           <label className="span2">Product name<input value={d.name} onChange={(e) => set("name", e.target.value)} required maxLength={160} /></label>
 
           <label>Department
-            <select value={d.department} onChange={(e) => setD((x) => ({ ...x, department: e.target.value as Department, collection: "", sizes: DEPARTMENTS.find((z) => z.slug === e.target.value)!.sizes.length === 1 ? ["Free size"] : [] }))}>
-              {DEPARTMENTS.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}
+            <select value={d.department} onChange={(e) => setD((x) => ({ ...x, department: e.target.value as Department, collection: "", sizes: departments.find((z) => z.slug === e.target.value)?.sizes.length === 1 ? ["Free size"] : [] }))}>
+              {departments.map((x) => <option key={x.slug} value={x.slug}>{x.label}{x.active ? "" : " (off)"}</option>)}
             </select>
           </label>
           <label>Collection ({dept.label})

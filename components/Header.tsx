@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { AnimatePresence, m } from "framer-motion";
-import { DEPARTMENTS } from "@/lib/shared";
 import type { Department } from "@/lib/types";
+import { useDepartments } from "./Departments";
 import { Wordmark } from "./Logo";
 import { EASE } from "./motion/config";
 import { useHideOnScroll } from "./motion/ScrollUI";
@@ -14,6 +14,7 @@ import { useStore } from "./Store";
 type Group = { slug: string; name: string; department: string };
 
 function DeptNav() {
+  const DEPARTMENTS = useDepartments();
   const path = usePathname();
   const sp = useSearchParams();
   const active = DEPARTMENTS.find((d) => path === `/${d.slug}` || sp.get("department") === d.slug)?.slug;
@@ -32,6 +33,7 @@ function DeptNav() {
 
 export default function Header({ announcement, collections }: { announcement: string; collections: Group[] }) {
   const [open, setOpen] = useState(false);
+  const DEPARTMENTS = useDepartments();
   const [expanded, setExpanded] = useState<Department | null>(null);
   const { count, wishlist } = useStore();
   const closeRef = useRef<HTMLButtonElement>(null);

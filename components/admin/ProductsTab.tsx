@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Collection, Department, Product } from "@/lib/types";
-import { DEPARTMENTS, departmentLabel, salePrice } from "@/lib/shared";
+import type { Collection, Department, DepartmentDef, Product } from "@/lib/types";
+import { departmentLabel, salePrice } from "@/lib/shared";
 import { api } from "./api";
 import ProductForm from "./ProductForm";
 import { downloadCsv, rupees } from "./ui";
@@ -27,7 +27,8 @@ function Prompt({ title, label, type = "number", initial = "", onOk, onClose }: 
   );
 }
 
-export default function ProductsTab({ products, groups, reload }: { products: Product[]; groups: Collection[]; reload: () => void }) {
+export default function ProductsTab({ products, groups, departments, reload }: { products: Product[]; groups: Collection[]; departments: DepartmentDef[]; reload: () => void }) {
+  const label = (s: string) => departmentLabel(s, departments);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState("");
   const [dept, setDept] = useState<Department | "">("");
@@ -100,7 +101,7 @@ export default function ProductsTab({ products, groups, reload }: { products: Pr
   const exportCsv = () =>
     downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, [
       ["Name", "SKU", "Department", "Collection", "MRP", "Discount %", "Sale price", "Stock", "Sizes", "Visible", "Trending", "New", "URL slug"],
-      ...filtered.map((p) => [p.name, p.sku, departmentLabel(p.department), collName(p), p.mrp, p.discountPercent, salePrice(p), p.stock, p.sizes.join(" | "), p.active ? "yes" : "no", p.trending ? "yes" : "no", p.isNew ? "yes" : "no", p.slug]),
+      ...filtered.map((p) => [p.name, p.sku, label(p.department), collName(p), p.mrp, p.discountPercent, salePrice(p), p.stock, p.sizes.join(" | "), p.active ? "yes" : "no", p.trending ? "yes" : "no", p.isNew ? "yes" : "no", p.slug]),
     ]);
 
   const deptCollections = groups.filter((g) => g.kind === "collection" && (!dept || g.department === dept));
@@ -119,7 +120,7 @@ export default function ProductsTab({ products, groups, reload }: { products: Pr
         <input type="search" placeholder="Search name or SKU…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search products" />
         <select value={dept} onChange={(e) => { setDept(e.target.value as Department | ""); setColl(""); }} aria-label="Department">
           <option value="">All departments</option>
-          {DEPARTMENTS.map((d) => <option key={d.slug} value={d.slug}>{d.label}</option>)}
+          {departments.map((d) => <option key={d.slug} value={d.slug}>{d.label}{d.active ? "" : " (off)"}</option>)}
         </select>
         <select value={coll} onChange={(e) => setColl(e.target.value)} aria-label="Collection">
           <option value="">All collections</option>
@@ -142,14 +143,14 @@ export default function ProductsTab({ products, groups, reload }: { products: Pr
           <button className="a-btn a-btn--sm" disabled={busy} onClick={() => bulk({ action: "deactivate" }, "Hidden from store")}>Hide</button>
           <button className="a-btn a-btn--sm" disabled={busy} onClick={() => setPrompt({ kind: "discount" })}>Set discount…</button>
           <button className="a-btn a-btn--sm" disabled={busy} onClick={() => setPrompt({ kind: "stock" })}>Set stock…</button>
-          <select className="a-bulk__sel" disabled={busy} value="" aria-label="Move to department" onChange={(e) => e.target.value && bulk({ action: "department", department: e.target.value }, `Moved to ${departmentLabel(e.target.value)}`)}>
+          <select className="a-bulk__sel" disabled={busy} value="" aria-label="Move to department" onChange={(e) => e.target.value && bulk({ action: "department", department: e.target.value }, `Moved to ${label(e.target.value)}`)}>
             <option value="">Move to department…</option>
-            {DEPARTMENTS.map((d) => <option key={d.slug} value={d.slug}>{d.label}</option>)}
+            {departments.map((d) => <option key={d.slug} value={d.slug}>{d.label}{d.active ? "" : " (off)"}</option>)}
           </select>
           <select className="a-bulk__sel" disabled={busy} value="" aria-label="Set collection" onChange={(e) => e.target.value && bulk({ action: "collection", value: e.target.value === "__none" ? "" : e.target.value }, "Collection updated")}>
             <option value="">Set collection…</option>
             <option value="__none">— none —</option>
-            {groups.filter((g) => g.kind === "collection").map((g) => <option key={g.slug} value={g.slug}>{departmentLabel(g.department)} · {g.name}</option>)}
+            {groups.filter((g) => g.kind === "collection").map((g) => <option key={g.slug} value={g.slug}>{label(g.department)} · {g.name}</option>)}
           </select>
           <button className="a-btn a-btn--sm" disabled={busy} onClick={() => bulk({ action: "trending", value: true }, "Marked as featured")}>Feature</button>
           <button className="a-btn a-btn--sm a-btn--danger" disabled={busy} onClick={() => confirm(`Delete ${sel.size} product(s)? This can't be undone.`) && bulk({ action: "delete" }, "Deleted")}>Delete</button>
@@ -174,7 +175,7 @@ export default function ProductsTab({ products, groups, reload }: { products: Pr
               </span>
               <span className="a-row__meta">
                 <button type="button" className={`a-pill a-pill--btn${p.active ? "" : " a-pill--off"}`} onClick={() => quick(p, { action: p.active ? "deactivate" : "activate" })} title="Click to toggle visibility">{p.active ? "Visible" : "Hidden"}</button>
-                <span className="a-pill a-pill--dept">{departmentLabel(p.department)}</span>
+                <span className="a-pill a-pill--dept">{label(p.department)}</span>
                 <span>{collName(p)}</span>
                 {p.trending && <span className="a-pill a-pill--warn">Featured</span>}
                 <label className="a-stock">Stock
@@ -210,7 +211,7 @@ export default function ProductsTab({ products, groups, reload }: { products: Pr
         />
       )}
       {editing && (
-        <ProductForm product={editing === "new" ? undefined : editing} groups={groups} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />
+        <ProductForm product={editing === "new" ? undefined : editing} groups={groups} departments={departments} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />
       )}
     </>
   );

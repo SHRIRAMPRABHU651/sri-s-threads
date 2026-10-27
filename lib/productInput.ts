@@ -1,11 +1,11 @@
 import { bool, num, str } from "./api";
 import { isDepartment, slugify } from "./shared";
-import type { Collection, Product } from "./types";
+import type { Collection, DepartmentDef, Product } from "./types";
 
 type Input = Omit<Product, "id" | "createdAt">;
 
 /** Validates & normalises an admin-submitted product. Returns an error string on failure. */
-export function parseProduct(body: Record<string, unknown>, groups: Collection[]): Input | { error: string } {
+export function parseProduct(body: Record<string, unknown>, groups: Collection[], depts: DepartmentDef[]): Input | { error: string } {
   const name = str(body.name, 160);
   if (name.length < 2) return { error: "Product name is required." };
   const mrp = Math.round(num(body.mrp));
@@ -22,7 +22,8 @@ export function parseProduct(body: Record<string, unknown>, groups: Collection[]
         .slice(0, 10)
     : [];
 
-  const department = isDepartment(body.department) ? body.department : "women";
+  if (!isDepartment(body.department, depts)) return { error: "Choose a department." };
+  const department = body.department;
   // a collection must exist AND belong to the product's department; fabric / occasion are shared by all departments
   const pick = (v: unknown, kind: Collection["kind"]) =>
     groups.some((g) => g.kind === kind && g.slug === v && (kind !== "collection" || g.department === department)) ? String(v) : "";

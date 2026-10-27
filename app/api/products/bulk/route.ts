@@ -1,4 +1,4 @@
-import { bulkUpdateProducts, listCollections, type BulkAction } from "@/lib/db";
+import { bulkUpdateProducts, listCollections, listDepartments, type BulkAction } from "@/lib/db";
 import { fail, json, num, readJson, requireAdmin, str } from "@/lib/api";
 import { isDepartment } from "@/lib/shared";
 
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     if (!(percent >= 0 && percent <= 90)) return fail("Discount must be between 0 and 90.");
     op = { action: "discount", percent };
   } else if (a === "department") {
-    if (!isDepartment(body?.department)) return fail("Unknown department.");
+    if (!isDepartment(body?.department, await listDepartments(true))) return fail("Unknown department.");
     op = { action: "department", department: body!.department as never };
   } else if (a === "collection" || a === "fabric" || a === "occasion") {
     const value = str(body?.value, 80);

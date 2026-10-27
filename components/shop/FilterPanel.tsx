@@ -2,7 +2,8 @@
 
 import { AnimatePresence, m } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
-import { DEPARTMENTS, DISCOUNT_STEPS, inr } from "@/lib/shared";
+import { DISCOUNT_STEPS, inr } from "@/lib/shared";
+import { useDepartments } from "../Departments";
 import type { CatalogQuery } from "@/lib/catalogQuery";
 import type { CatalogResult } from "@/lib/catalog";
 import type { Collection } from "@/lib/types";
@@ -52,6 +53,7 @@ function PriceRange({ bounds, min, max, onCommit }: { bounds: { min: number; max
 }
 
 export default function FilterPanel({ query, facets, groups, onChange, idPrefix = "f" }: { query: CatalogQuery; facets: Facets; groups: Collection[]; onChange: (patch: Patch) => void; idPrefix?: string }) {
+  const DEPARTMENTS = useDepartments();
   const nameOf = (kind: string, slug: string) => groups.find((g) => g.kind === kind && g.slug === slug)?.name ?? slug;
   const counts = (rows: { name: string; count: number }[]) => new Map(rows.map((r) => [r.name, r.count]));
 

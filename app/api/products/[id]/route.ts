@@ -1,4 +1,4 @@
-import { deleteProduct, getProduct, listCollections, saveProduct } from "@/lib/db";
+import { activeDepartmentSlugs, deleteProduct, getProduct, listCollections, listDepartments, saveProduct } from "@/lib/db";
 import { fail, json, readJson, requireAdmin } from "@/lib/api";
 import { parseProduct } from "@/lib/productInput";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const p = await getProduct(params.id);
-  return p && p.active ? json(p) : fail("Product not found.", 404);
+  return p && p.active && (await activeDepartmentSlugs()).includes(p.department) ? json(p) : fail("Product not found.", 404);
 }
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
@@ -16,7 +16,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!existing) return fail("Product not found.", 404);
   const body = await readJson(req);
   if (!body) return fail("Invalid request body.");
-  const parsed = parseProduct(body, await listCollections(undefined, { includeInactive: true }));
+  const parsed = parseProduct(body, await listCollections(undefined, { includeInactive: true }), await listDepartments(true));
   if ("error" in parsed) return fail(parsed.error);
   return json(await saveProduct({ ...parsed, id: existing.id }));
 }

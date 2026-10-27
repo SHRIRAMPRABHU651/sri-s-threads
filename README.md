@@ -53,7 +53,7 @@ npm run typecheck
 ## What's in it
 
 **Storefront** – branded loader (~2 s, first visit per session) · home (hero, department tiles, featured collections, trending,
-looks, testimonials) · **Women / Men / Kids / Accessories** pages, each with the collections the admin created for it ·
+looks, testimonials) · one page per department (by default Women / Men / Kids / Accessories — all managed in the admin), each with the collections created for it ·
 **Top Collection / Shop by Fabric / Shop by Occasion** pages · **shop page** with server-side filters (department, collection,
 fabric, occasion, price range, size, colour, minimum discount, in stock, new), search, sort (featured, newest, price, biggest
 discount, A–Z), removable filter chips, pagination and URL-shareable state (mobile uses a bottom-sheet) · product page
@@ -70,6 +70,7 @@ back-to-top, fly-to-bag, animated filter chips and sheets, page transitions. It 
 - **Products** – search and filter by department / collection / status, sort, **bulk actions** (show/hide, discount %, stock,
   move department / collection, feature, delete), duplicate, inline stock editing, CSV export, per-product discount %, sizes,
   colours, SKU, sale end time.
+- **Departments** – the main sections of the store (Women, Men, Kids, Accessories… or anything you like). **Switch any department on or off** (off = hidden from the menu, home page, shop, product pages and the sitemap, with nothing deleted), **rename** it, **add new ones** (e.g. *Dhoti & Veshti*), **reorder** them, set its picture, description and size options. A department's web address (e.g. `/men`) is fixed when it is created so links never break when you rename it. You can't delete a department that still has products or collections (switch it off instead), and at least one must stay on.
 - **Collections** – add / edit / hide / delete groups per department (e.g. *Sherwani Sets* under Men), each with a card image and order.
 - **Coupons** – percent or flat, minimum order, max discount, usage limit, expiry, enable/disable.
 - **Orders** – status, private notes, WhatsApp the customer, delete. Cancelling an order puts its stock back.

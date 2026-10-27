@@ -1,17 +1,17 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Collection, CollectionKind, Department } from "@/lib/types";
-import { COLLECTION_KINDS, DEPARTMENTS, departmentLabel } from "@/lib/shared";
+import type { Collection, CollectionKind, Department, DepartmentDef } from "@/lib/types";
+import { COLLECTION_KINDS, departmentLabel } from "@/lib/shared";
 import { api } from "./api";
 import { uploadImage } from "./uploadImage";
 
 type Draft = { kind: CollectionKind; department: Department; name: string; image: string; featured: boolean; active: boolean; sort: string };
 
-function CollectionForm({ item, defaultKind, defaultDept, onClose, onSaved }: { item?: Collection; defaultKind: CollectionKind; defaultDept: Department; onClose: () => void; onSaved: () => void }) {
+function CollectionForm({ item, defaultKind, defaultDept, departments, onClose, onSaved }: { item?: Collection; defaultKind: CollectionKind; defaultDept: Department; departments: DepartmentDef[]; onClose: () => void; onSaved: () => void }) {
   const [d, setD] = useState<Draft>(
     item
-      ? { kind: item.kind, department: (item.department || "women") as Department, name: item.name, image: item.image, featured: item.featured, active: item.active, sort: String(item.sort) }
+      ? { kind: item.kind, department: (item.department || defaultDept) as Department, name: item.name, image: item.image, featured: item.featured, active: item.active, sort: String(item.sort) }
       : { kind: defaultKind, department: defaultDept, name: "", image: "", featured: true, active: true, sort: "100" },
   );
   const [error, setError] = useState("");
@@ -54,7 +54,7 @@ function CollectionForm({ item, defaultKind, defaultDept, onClose, onSaved }: { 
           {d.kind === "collection" && (
             <label>Department
               <select value={d.department} onChange={(e) => set("department", e.target.value as Department)}>
-                {DEPARTMENTS.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}
+                {departments.map((x) => <option key={x.slug} value={x.slug}>{x.label}{x.active ? "" : " (off)"}</option>)}
               </select>
             </label>
           )}
@@ -85,7 +85,8 @@ function CollectionForm({ item, defaultKind, defaultDept, onClose, onSaved }: { 
   );
 }
 
-export default function CollectionsTab({ groups, counts, reload }: { groups: Collection[]; counts: Record<string, number>; reload: () => void }) {
+export default function CollectionsTab({ groups, counts, departments, reload }: { groups: Collection[]; counts: Record<string, number>; departments: DepartmentDef[]; reload: () => void }) {
+  const firstDept = departments[0]?.slug ?? "";
   const [editing, setEditing] = useState<{ item?: Collection; kind: CollectionKind; dept: Department } | null>(null);
 
   async function remove(c: Collection) {
@@ -116,7 +117,7 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
       <div className="a-row__actions">
         <a className="a-btn a-btn--sm" href={`/shop?${param}=${c.slug}`} target="_blank" rel="noreferrer">View</a>
         <button className="a-btn a-btn--sm" onClick={() => toggle(c)}>{c.active ? "Hide" : "Show"}</button>
-        <button className="a-btn a-btn--sm" onClick={() => setEditing({ item: c, kind: c.kind, dept: (c.department || "women") as Department })}>Edit</button>
+        <button className="a-btn a-btn--sm" onClick={() => setEditing({ item: c, kind: c.kind, dept: (c.department || firstDept) as Department })}>Edit</button>
         <button className="a-btn a-btn--sm a-btn--danger" onClick={() => remove(c)}>Delete</button>
       </div>
     </div>
@@ -130,15 +131,15 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
           <section key={k.kind} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div className="a-head">
               <h2>{k.title} ({items.length})</h2>
-              <button className="a-btn a-btn--primary" onClick={() => setEditing({ kind: k.kind, dept: "women" })}>+ Add</button>
+              <button className="a-btn a-btn--primary" onClick={() => setEditing({ kind: k.kind, dept: firstDept })}>+ Add</button>
             </div>
             {k.kind === "collection" ? (
-              DEPARTMENTS.map((d) => {
+              departments.map((d) => {
                 const sub = items.filter((g) => g.department === d.slug);
                 return (
                   <div key={d.slug} className="a-subgroup">
-                    <div className="a-subgroup__head"><h3>{d.label} <span className="a-mute">({sub.length})</span></h3><button className="a-btn a-btn--sm" onClick={() => setEditing({ kind: "collection", dept: d.slug })}>+ Add to {d.label}</button></div>
-                    <div className="a-list">{sub.map((c) => row(c, k.param))}{sub.length === 0 && <p className="a-mute">No {departmentLabel(d.slug)} collections yet.</p>}</div>
+                    <div className="a-subgroup__head"><h3>{d.label}{!d.active && <span className="a-pill a-pill--off"> off</span>} <span className="a-mute">({sub.length})</span></h3><button className="a-btn a-btn--sm" onClick={() => setEditing({ kind: "collection", dept: d.slug })}>+ Add to {d.label}</button></div>
+                    <div className="a-list">{sub.map((c) => row(c, k.param))}{sub.length === 0 && <p className="a-mute">No {departmentLabel(d.slug, departments)} collections yet.</p>}</div>
                   </div>
                 );
               })
@@ -148,7 +149,7 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
           </section>
         );
       })}
-      {editing && <CollectionForm item={editing.item} defaultKind={editing.kind} defaultDept={editing.dept} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+      {editing && <CollectionForm item={editing.item} defaultKind={editing.kind} defaultDept={editing.dept} departments={departments} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     </>
   );
 }

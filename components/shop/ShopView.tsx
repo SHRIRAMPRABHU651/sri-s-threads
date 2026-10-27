@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, m } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { DEPARTMENTS, PAGE_SIZE, SORTS, departmentLabel, inr, type SortValue } from "@/lib/shared";
+import { PAGE_SIZE, SORTS, departmentLabel, inr, type SortValue } from "@/lib/shared";
+import { useDepartments } from "../Departments";
 import { hasActiveFilters, toSearchParams, type CatalogQuery } from "@/lib/catalogQuery";
 import type { CatalogResult } from "@/lib/catalog";
-import type { Collection } from "@/lib/types";
+import type { Collection, DepartmentDef } from "@/lib/types";
 import ProductCard from "../ProductCard";
 import { EASE } from "../motion/config";
 import { Stagger, StaggerItem } from "../motion/Reveal";
@@ -16,10 +17,10 @@ import { useMediaQuery } from "./useMediaQuery";
 
 type Chip = { key: string; label: string; remove: Partial<CatalogQuery> };
 
-function buildChips(q: CatalogQuery, groups: Collection[]): Chip[] {
+function buildChips(q: CatalogQuery, groups: Collection[], depts: DepartmentDef[]): Chip[] {
   const name = (kind: string, slug: string) => groups.find((g) => g.kind === kind && g.slug === slug)?.name ?? slug;
   const chips: Chip[] = [];
-  if (q.department) chips.push({ key: "dept", label: departmentLabel(q.department), remove: { department: undefined } });
+  if (q.department) chips.push({ key: "dept", label: departmentLabel(q.department, depts), remove: { department: undefined } });
   if (q.q) chips.push({ key: "q", label: `“${q.q}”`, remove: { q: undefined } });
   q.collections?.forEach((s) => chips.push({ key: `c-${s}`, label: name("collection", s), remove: { collections: q.collections!.filter((x) => x !== s) } }));
   q.fabrics?.forEach((s) => chips.push({ key: `f-${s}`, label: name("fabric", s), remove: { fabrics: q.fabrics!.filter((x) => x !== s) } }));
@@ -43,6 +44,7 @@ function pageList(page: number, pages: number): (number | "…")[] {
 }
 
 export default function ShopView({ result, query, groups, title }: { result: CatalogResult; query: CatalogQuery; groups: Collection[]; title: string }) {
+  const DEPARTMENTS = useDepartments();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const isDesktop = useMediaQuery("(min-width: 900px)");
@@ -83,7 +85,7 @@ export default function ShopView({ result, query, groups, title }: { result: Cat
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [sheet]);
 
-  const chips = useMemo(() => buildChips(query, groups), [query, groups]);
+  const chips = useMemo(() => buildChips(query, groups, DEPARTMENTS), [query, groups, DEPARTMENTS]);
   const filtered = hasActiveFilters(query);
   const first = (result.page - 1) * PAGE_SIZE + 1;
   const last = Math.min(result.total, result.page * PAGE_SIZE);

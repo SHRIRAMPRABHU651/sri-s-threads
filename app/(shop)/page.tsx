@@ -9,11 +9,11 @@ import TrendingCarousel from "@/components/TrendingCarousel";
 import Marquee from "@/components/motion/Marquee";
 import { Reveal } from "@/components/motion/Reveal";
 import { queryProducts } from "@/lib/catalog";
-import { listCollections } from "@/lib/db";
+import { listCollections, listDepartments } from "@/lib/db";
 import { BRAND } from "@/lib/shared";
 
 export default async function HomePage() {
-  const [{ items }, collections] = await Promise.all([queryProducts({ sort: "featured", page: 1 }), listCollections("collection")]);
+  const [{ items }, collections, departments] = await Promise.all([queryProducts({ sort: "featured", page: 1 }), listCollections("collection"), listDepartments()]);
   const trending = items.slice(0, 12);
   const looks = items.slice(0, 7);
   // featured collections first; if none are flagged for a department we still show its first few so tabs are never empty
@@ -22,11 +22,11 @@ export default async function HomePage() {
   return (
     <>
       <HeroCarousel />
-      <Marquee items={["Women", "Men", "Kids", "Accessories", "Order on WhatsApp", "New arrivals every week", "Traditional · Ethnic · Elegant"]} />
+      <Marquee items={[...departments.map((d) => d.label), "Order on WhatsApp", "New arrivals every week", "Traditional · Ethnic · Elegant"]} />
 
       <section className="section">
         <SectionTitle eyebrow="Shop by">Department</SectionTitle>
-        <DeptCards />
+        <DeptCards departments={departments} />
       </section>
 
       {featured.length > 0 && (

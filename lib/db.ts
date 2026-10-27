@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { randomUUID } from "crypto";
 import { Binary, MongoClient, type Db } from "mongodb";
-import type { Collection, CollectionKind, Coupon, Department, Order, OrderStatus, Product, Settings, Subscriber } from "./types";
+import type { Collection, CollectionKind, Coupon, Department, DepartmentDef, Order, OrderStatus, Product, Settings, Subscriber } from "./types";
+import { DEFAULT_DEPARTMENTS } from "./shared";
 import { seedCollections, seedCoupons, seedProducts, seedSettings } from "./seed";
 import { destroyByUrl } from "./cloudinary";
 
@@ -67,6 +68,7 @@ async function init(d: Db) {
     d.collection("products").createIndex({ slug: 1 }, { unique: true }),
     d.collection("products").createIndex({ createdAt: -1 }),
     d.collection("coupons").createIndex({ code: 1 }, { unique: true }),
+    d.collection("departments").createIndex({ sort: 1 }),
     d.collection("collections").createIndex({ kind: 1, slug: 1 }, { unique: true }),
     d.collection("orders").createIndex({ createdAt: -1 }),
     d.collection("login_attempts").createIndex({ resetAt: 1 }, { expireAfterSeconds: 0 }),
@@ -79,6 +81,7 @@ async function init(d: Db) {
         c("products").insertMany(seedProducts().map(toDoc)),
         c("collections").insertMany(seedCollections().map(toDoc)),
         c("coupons").insertMany(seedCoupons().map(toDoc)),
+        c("departments").insertMany(DEFAULT_DEPARTMENTS.map(deptDoc)),
         c("settings").updateOne({ _id: "main" }, { $setOnInsert: seedSettings() }, { upsert: true }),
       ]);
     } catch (e) {
@@ -92,9 +95,10 @@ async function init(d: Db) {
 /**
  * One-time, idempotent upgrade of databases created by older versions:
  *   v2 — departments (women/men/kids/accessories), per-product size lists, new department collections.
+ *   v3 — departments become admin-managed data (name, picture, sizes, on/off, order).
  * The version claim is atomic, so concurrent serverless instances can't run it twice.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 async function migrate(d: Db) {
   const c = (name: string) => d.collection<any>(name);
   await c("meta").updateOne({ _id: "schema" }, { $setOnInsert: { v: 0 } }, { upsert: true });
@@ -108,6 +112,9 @@ async function migrate(d: Db) {
     ]);
     await c("collections").updateMany({ department: { $exists: false }, kind: "collection" }, { $set: { department: "women" } });
     await c("collections").updateMany({ department: { $exists: false } }, { $set: { department: "" } });
+    for (const dd of DEFAULT_DEPARTMENTS) {
+      await c("departments").updateOne({ _id: dd.slug }, { $setOnInsert: deptDoc(dd) }, { upsert: true });
+    }
     for (const col of seedCollections()) {
       const { id, ...rest } = col;
       await c("collections").updateOne({ kind: col.kind, slug: col.slug }, { $setOnInsert: { _id: id, ...rest } }, { upsert: true });
@@ -175,7 +182,8 @@ const productImages = (p: Pick<Product, "images" | "colors">) => [...(p.images ?
 
 /* ---------------- Products ---------------- */
 export async function listProducts(opts: { includeInactive?: boolean } = {}): Promise<Product[]> {
-  const docs = await (await col("products")).find(opts.includeInactive ? {} : { active: true }).sort({ createdAt: -1 }).toArray();
+  const filter = opts.includeInactive ? {} : { active: true, department: { $in: await activeDepartmentSlugs() } };
+  const docs = await (await col("products")).find(filter).sort({ createdAt: -1 }).toArray();
   return docs.map((d) => fromDoc<Product>(d));
 }
 
@@ -269,12 +277,52 @@ export async function bulkUpdateProducts(ids: string[], op: BulkAction): Promise
   }
 }
 
+/* ---------------- Departments (admin-managed top-level sections) ---------------- */
+const deptDoc = (d: DepartmentDef) => { const { slug, ...rest } = d; return { _id: slug, ...rest }; };
+const deptFrom = (d: any): DepartmentDef => { const { _id, ...rest } = d; return { slug: _id, ...rest } as DepartmentDef; };
+
+export const listDepartments = cache(async (includeInactive = false): Promise<DepartmentDef[]> => {
+  const docs = await (await col("departments")).find(includeInactive ? {} : { active: true }).sort({ sort: 1, label: 1 }).toArray();
+  return docs.map(deptFrom);
+});
+export const activeDepartmentSlugs = async (): Promise<string[]> => (await listDepartments()).map((d) => d.slug);
+
+export async function saveDepartment(input: DepartmentDef, isNew: boolean): Promise<DepartmentDef | { error: string }> {
+  const departments = await col("departments");
+  if (isNew) {
+    if (await departments.findOne({ _id: input.slug })) return { error: "A department with this name already exists." };
+    await departments.insertOne(deptDoc(input));
+    return input;
+  }
+  const existing = await departments.findOne({ _id: input.slug });
+  if (!existing) return { error: "Department not found." };
+  // the slug is the URL (/men) and what products point at, so it stays fixed; everything else is editable
+  const { slug, ...rest } = input;
+  await departments.updateOne({ _id: slug }, { $set: rest });
+  if (existing.image !== input.image) await pruneImages([existing.image]);
+  return input;
+}
+
+export async function deleteDepartment(slug: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const departments = await col("departments");
+  const doc = await departments.findOne({ _id: slug });
+  if (!doc) return { ok: false, error: "Department not found." };
+  const [products, groups] = await Promise.all([(await col("products")).countDocuments({ department: slug }), (await col("collections")).countDocuments({ department: slug })]);
+  if (products || groups) return { ok: false, error: `Can't delete: it still has ${products} product(s) and ${groups} collection(s). Move or delete them first — or just switch the department off to hide it.` };
+  await departments.deleteOne({ _id: slug });
+  await pruneImages([doc.image]);
+  return { ok: true };
+}
+
 /* ---------------- Collections (admin-managed shop-by groups) ---------------- */
 export async function listCollections(kind?: CollectionKind, opts: { includeInactive?: boolean; department?: Department } = {}): Promise<Collection[]> {
   const filter: any = {};
   if (kind) filter.kind = kind;
-  if (opts.department) filter.department = { $in: [opts.department, ""] };
-  if (!opts.includeInactive) filter.active = true;
+  if (!opts.includeInactive) {
+    filter.active = true;
+    const live = await activeDepartmentSlugs();
+    filter.department = { $in: ["", ...(opts.department ? live.filter((s) => s === opts.department) : live)] };
+  } else if (opts.department) filter.department = { $in: [opts.department, ""] };
   const docs = await (await col("collections")).find(filter).sort({ sort: 1, name: 1 }).toArray();
   return docs.map((d) => fromDoc<Collection>(d));
 }

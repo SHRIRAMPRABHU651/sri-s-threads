@@ -1,10 +1,10 @@
 import { bool, num, str } from "./api";
 import { isDepartment, slugify } from "./shared";
-import type { Collection } from "./types";
+import type { Collection, DepartmentDef } from "./types";
 
 const KINDS: Collection["kind"][] = ["collection", "fabric", "occasion"];
 
-export function parseCollection(body: Record<string, unknown>): Omit<Collection, "id"> | { error: string } {
+export function parseCollection(body: Record<string, unknown>, depts: DepartmentDef[]): Omit<Collection, "id"> | { error: string } {
   const name = str(body.name, 60);
   if (name.length < 2) return { error: "Name is required." };
   const kind = KINDS.find((k) => k === body.kind);
@@ -13,6 +13,7 @@ export function parseCollection(body: Record<string, unknown>): Omit<Collection,
   if (!image) return { error: "Add an image for the collection card." };
   const slug = slugify(str(body.slug, 80) || name);
   if (!slug) return { error: "Name must contain letters or numbers." };
-  const department = kind === "collection" ? (isDepartment(body.department) ? body.department : "women") : "";
+  if (kind === "collection" && !isDepartment(body.department, depts)) return { error: "Choose a department for this collection." };
+  const department = kind === "collection" ? String(body.department) : "";
   return { kind, slug, name, image, department, featured: kind === "collection" && bool(body.featured), active: body.active === undefined ? true : bool(body.active), sort: Math.round(num(body.sort, 100)) };
 }

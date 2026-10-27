@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { DEPARTMENTS } from "@/lib/shared";
+import type { DepartmentDef } from "@/lib/types";
 import SmartImg from "./SmartImg";
 import { Stagger, StaggerItem } from "./motion/Reveal";
 
-/** "Shop by department" — four tall arches with an overlay label. */
-export default function DeptCards() {
+/** "Shop by department" — tall arches with an overlay label, one per department that is switched on. */
+export default function DeptCards({ departments }: { departments: DepartmentDef[] }) {
   return (
-    <Stagger className="dept-cards" gap={0.1}>
-      {DEPARTMENTS.map((d) => (
+    <Stagger className="dept-cards" gap={0.1} style={{ ["--dept-n" as string]: Math.min(departments.length, 4) }}>
+      {departments.map((d) => (
         <StaggerItem key={d.slug}>
           <Link href={`/${d.slug}`} className="dept-card">
             <SmartImg src={d.image} alt="" w={640} sizes="(max-width: 700px) 45vw, 280px" />

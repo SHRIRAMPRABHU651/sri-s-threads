@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { AnimatePresence, m } from "framer-motion";
 import { useState } from "react";
-import { DEPARTMENTS } from "@/lib/shared";
+import { useDepartments } from "./Departments";
 import type { Collection, Department } from "@/lib/types";
 import { EASE } from "./motion/config";
 import SmartImg from "./SmartImg";
 
 /** Home: featured collections with a department switcher. The grid cross-fades when you change tabs. */
 export default function FeaturedTabs({ collections }: { collections: Collection[] }) {
+  const DEPARTMENTS = useDepartments();
   const tabs = DEPARTMENTS.filter((d) => collections.some((c) => c.department === d.slug));
   const [dept, setDept] = useState<Department>(tabs[0]?.slug ?? "women");
   if (!tabs.length) return null;

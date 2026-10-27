@@ -761,7 +761,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ---------- larger screens ---------- */
 @media (min-width: 640px) {
-  .dept-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .dept-cards { grid-template-columns: repeat(var(--dept-n, 4), minmax(0, 1fr)); gap: 16px; }
   .dept-hero h1 { font-size: 54px; line-height: 60px; }
   .dept-hero { min-height: 380px; }
 }
