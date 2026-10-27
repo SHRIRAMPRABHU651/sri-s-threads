@@ -142,10 +142,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 .drawer__head { display: flex; align-items: center; justify-content: space-between; }
 .drawer__close { font-size: 28px; line-height: 1; background: none; border: 0; padding: 4px 8px; }
 .drawer__nav { display: flex; flex-direction: column; }
-.drawer__nav a { padding: 14px 0; border-bottom: 0.5px solid var(--n-500); font: 400 16px/24px var(--font-display); color: var(--brand-500); }
+.drawer__nav a { display: block; padding: 14px 0; border-bottom: 0.5px solid var(--n-500); font: 400 16px/24px var(--font-display); color: var(--brand-500); }
 .drawer__nav a:hover { color: var(--brand-700); }
-.drawer__nav .drawer__sub { padding: 10px 0 10px 12px; font-size: 14px; }
-.drawer__label { margin: 14px 0 2px; font: 500 11px/16px var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--n-500); }
+.drawer__nav .drawer__sub { display: block; padding: 12px 0 12px 12px; font-size: 15px; line-height: 22px; }
+.drawer__label { margin: 22px 0 4px; font: 500 11px/16px var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--n-500); }
 
 /* ---------- Section titles ---------- */
 .section { padding: 10px 0; }
@@ -590,12 +590,14 @@ ul { margin: 0; padding: 0; list-style: none; }
 .site-nav__sale { color: #b42318 !important; }
 .drawer { transform: none; visibility: visible; }
 .drawer__dept { display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid var(--n-500); }
-.drawer__dept a { flex: 1; border-bottom: 0 !important; }
+.drawer__dept a { flex: 1; min-width: 0; border-bottom: 0 !important; }
 .drawer__toggle { display: grid; place-items: center; width: 40px; height: 40px; background: none; border: 0; color: var(--brand-600); }
 .drawer__toggle svg { transition: transform 0.3s; }
 .drawer__toggle.is-open svg { transform: rotate(180deg); }
-.drawer__subs { overflow: hidden; background: rgba(255, 255, 255, 0.45); border-radius: 8px; margin: 4px 0 8px; }
-.drawer__subs .drawer__sub { padding-left: 16px; }
+.drawer__subs { display: flex; flex-direction: column; overflow: hidden; background: rgba(255, 255, 255, 0.45); border-radius: 10px; margin: 2px 0 10px; padding: 4px 0; }
+.drawer__nav .drawer__subs .drawer__sub { padding: 11px 16px; border-bottom: 0; font-size: 15px; }
+.drawer__nav .drawer__subs .drawer__sub + .drawer__sub { border-top: 0.5px solid rgba(9, 43, 43, 0.12); }
+.drawer { overscroll-behavior: contain; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
 
 /* ---------- section titles / marquee ---------- */
 .section-title__eyebrow { font: 500 11px/16px var(--font-ui); letter-spacing: 0.28em; text-transform: uppercase; color: var(--gold); margin-bottom: 2px; }
