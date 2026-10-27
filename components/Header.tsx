@@ -5,17 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "./Logo";
 import { useStore } from "./Store";
 
-const NAV = [
-  { href: "/", label: "Home" },
-  { href: "/collections", label: "Top Collection" },
-  { href: "/collections/fabric", label: "Shop by Fabric" },
-  { href: "/collections/occasion", label: "Shop by Occasion" },
-  { href: "/shop", label: "All Products" },
-  { href: "/wishlist", label: "Wishlist" },
-  { href: "/cart", label: "My Bag" },
-];
+type Group = { slug: string; name: string };
 
-export default function Header({ announcement }: { announcement: string }) {
+export default function Header({ announcement, collections }: { announcement: string; collections: Group[] }) {
   const [open, setOpen] = useState(false);
   const { count, wishlist } = useStore();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -67,8 +59,29 @@ export default function Header({ announcement }: { announcement: string }) {
           <button ref={closeRef} className="drawer__close" type="button" aria-label="Close menu" onClick={() => setOpen(false)}>&times;</button>
         </div>
         <div className="drawer__nav">
-          {NAV.map((n) => (
+          {[
+            { href: "/", label: "Home" },
+            { href: "/shop", label: "All Products" },
+          ].map((n) => (
             <Link key={n.href} href={n.href} onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>{n.label}</Link>
+          ))}
+          {collections.length > 0 && <p className="drawer__label">Collections</p>}
+          {collections.map((c) => (
+            <Link key={c.slug} href={`/shop?collection=${c.slug}`} className="drawer__sub" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>{c.name}</Link>
+          ))}
+          <p className="drawer__label">Shop by</p>
+          {[
+            { href: "/collections/fabric", label: "Fabric" },
+            { href: "/collections/occasion", label: "Occasion" },
+          ].map((n) => (
+            <Link key={n.href} href={n.href} className="drawer__sub" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>{n.label}</Link>
+          ))}
+          <p className="drawer__label">My account</p>
+          {[
+            { href: "/wishlist", label: "Wishlist" },
+            { href: "/cart", label: "My Bag" },
+          ].map((n) => (
+            <Link key={n.href} href={n.href} className="drawer__sub" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>{n.label}</Link>
           ))}
         </div>
       </nav>

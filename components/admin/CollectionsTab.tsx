@@ -12,7 +12,7 @@ function CollectionForm({ item, defaultKind, onClose, onSaved }: { item?: Collec
   const [d, setD] = useState<Draft>(
     item
       ? { kind: item.kind, name: item.name, image: item.image, featured: item.featured, active: item.active, sort: String(item.sort) }
-      : { kind: defaultKind, name: "", image: "", featured: false, active: true, sort: "100" },
+      : { kind: defaultKind, name: "", image: "", featured: true, active: true, sort: "100" },
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -118,6 +118,7 @@ export default function CollectionsTab({ groups, counts, reload }: { groups: Col
                     </span>
                   </div>
                   <div className="a-row__actions">
+                    <a className="a-btn a-btn--sm" href={`/shop?${k.param}=${c.slug}`} target="_blank" rel="noreferrer">View</a>
                     <button className="a-btn a-btn--sm" onClick={() => toggle(c)}>{c.active ? "Hide" : "Show"}</button>
                     <button className="a-btn a-btn--sm" onClick={() => setEditing({ item: c, kind: c.kind })}>Edit</button>
                     <button className="a-btn a-btn--sm a-btn--danger" onClick={() => remove(c)}>Delete</button>

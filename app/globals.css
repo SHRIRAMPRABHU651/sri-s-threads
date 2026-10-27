@@ -154,6 +154,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 .drawer__nav { display: flex; flex-direction: column; }
 .drawer__nav a { padding: 14px 0; border-bottom: 0.5px solid var(--n-500); font: 400 16px/24px var(--font-display); color: var(--brand-500); }
 .drawer__nav a:hover { color: var(--brand-700); }
+.drawer__nav .drawer__sub { padding: 10px 0 10px 12px; font-size: 14px; }
+.drawer__label { margin: 14px 0 2px; font: 500 11px/16px var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--n-500); }
 
 /* ---------- Section titles ---------- */
 .section { padding: 10px 0; }
@@ -389,7 +391,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ---------- Cart / checkout ---------- */
 .page-narrow { max-width: 960px; margin-inline: auto; padding: 8px 16px 40px; }
-.cart-layout { display: grid; gap: 18px; }
+.cart-layout { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+.cart-layout > * { min-width: 0; }
 .cart-lines { display: flex; flex-direction: column; }
 .cart-line { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 14px 0; border-bottom: 0.5px solid var(--n-400); }
 .cart-line__img { width: 84px; height: 112px; object-fit: cover; border-radius: var(--radius-lg); border: 0.6px solid var(--card-border); }
@@ -403,7 +406,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 .link-btn { background: none; border: 0; padding: 0; color: var(--danger); font: 500 12px/18px var(--font-ui); text-decoration: underline; }
 .summary { background: var(--cream); border-radius: var(--radius-lg); padding: 16px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); display: flex; flex-direction: column; gap: 10px; align-self: start; }
 .summary h2 { font: 400 18px/24px var(--font-display); color: var(--brand-700); }
-.summary__row { display: flex; justify-content: space-between; font: 400 14px/20px var(--font-body); }
+.summary__row { display: flex; justify-content: space-between; gap: 12px; font: 400 14px/20px var(--font-body); }
+.summary__row > span:last-child { white-space: nowrap; }
 .summary__row--total { font: 700 16px/24px var(--font-body); border-top: 1px solid var(--n-200); padding-top: 10px; }
 .summary__row--discount { color: var(--success-700); }
 .coupon-form { display: flex; gap: 8px; }
@@ -413,7 +417,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .msg--ok { color: var(--success-700); }
 .msg--err { color: var(--danger); }
 
-.form-grid { display: grid; gap: 12px; }
+.form-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.form-grid label, .form-grid .phone { min-width: 0; }
+.form-grid .phone input { min-width: 0; flex: 1; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; font: 500 12px/18px var(--font-ui); color: var(--n-700); }
 .form-grid input, .form-grid textarea, .form-grid select {
   padding: 10px 12px; border: 1px solid var(--n-200); border-radius: var(--radius-lg); background: var(--n-100);
@@ -421,7 +427,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .form-grid input:focus, .form-grid textarea:focus, .form-grid select:focus { outline: 0; border-color: var(--brand-300); background: #fff; }
 .form-grid textarea { resize: vertical; min-height: 84px; }
-.form-grid .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .phone { display: flex; align-items: stretch; }
 .phone span { display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--n-200); border-right: 0; border-radius: var(--radius-lg) 0 0 var(--radius-lg); background: #fff; font: 500 14px var(--font-ui); }
 .phone input { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
@@ -483,6 +489,16 @@ ul { margin: 0; padding: 0; list-style: none; }
 .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- Larger screens ---------- */
+/* very small phones (≤ 360px): keep the header on one line */
+@media (max-width: 360px) {
+  .site-header__inner { padding-inline: 4px; }
+  .site-header__group { min-width: 0; gap: 0; }
+  .icon-btn { width: 32px; height: 32px; }
+  .site-header .wordmark { --wm-h: 28px; gap: 4px; }
+  .wordmark__text { letter-spacing: 0.04em; }
+  .hero__ui { padding-inline: 16px; }
+}
+
 @media (min-width: 640px) {
   .collection-grid { grid-template-columns: repeat(3, minmax(0, 200px)); gap: 16px 20px; }
   .promo-grid { flex-direction: row; justify-content: center; align-items: stretch; }

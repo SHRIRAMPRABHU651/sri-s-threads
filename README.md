@@ -39,10 +39,15 @@ Design source: the Figma file "Sri's threads".
 
 ```bash
 npm install
-cp .env.example .env.local     # fill in MONGODB_URI etc. (an Atlas free cluster works fine for dev)
-npm run dev                    # http://localhost:3000
+npm run dev          # http://localhost:3000  — works with no setup (see below)
 npm run typecheck
 ```
+
+* **No `.env.local` needed to try it.** If `MONGODB_URI` is empty, `npm run dev` starts a local development MongoDB
+  automatically (first run downloads it, ~1 minute; data is kept in `.data/mongo`). Dev login: `admin` / `admin123`.
+* To use your Atlas cluster locally, copy `.env.example` to `.env.local` and fill in `MONGODB_URI`.
+* In **production** (`next start` / Vercel) `MONGODB_URI`, `ADMIN_PASSWORD` and `SESSION_SECRET` are required — if
+  `MONGODB_URI` is missing the page shows an error telling you exactly that.
 
 ## What's in it
 
@@ -55,7 +60,8 @@ coupon codes · checkout (name, mobile, address → WhatsApp).
 - **Products** – add / edit / delete, photo upload, per-product **discount %**, stock, colours, collection / fabric / occasion,
   trending & “New” flags, sale end time, “discount everything” shortcut.
 - **Collections** – add / edit / hide / delete the groups shown on the storefront (e.g. *Chudidhar*, *Kurtis*, *Lehengas*,
-  *Wedding Wear*, *Silk*), each with its own card image and display order; pick which appear on the home page.
+  *Wedding Wear*, *Silk*), each with its own card image and display order. A new collection appears straight away on the
+  collection page, the menu, the shop filters, the product form, and (if “Show on the home page” is ticked, the default) the home page.
 - **Coupons** – percent or flat, minimum order, max discount, usage limit, expiry, enable/disable.
 - **Orders** – status, WhatsApp the customer, delete. Cancelling an order puts its stock back.
 - **Settings** – WhatsApp number, announcement bar, social links, newsletter subscribers.

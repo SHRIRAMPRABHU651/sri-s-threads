@@ -10,7 +10,9 @@ import { BRAND } from "@/lib/shared";
 
 export default async function HomePage() {
   const [products, collections] = await Promise.all([listProducts(), listCollections("collection")]);
-  const featured = collections.filter((c) => c.featured).slice(0, 6);
+  // featured ones first; if none are flagged, still show the first few so the section is never empty
+  const flagged = collections.filter((c) => c.featured);
+  const featured = (flagged.length ? flagged : collections).slice(0, 8);
   const trending = products.filter((p) => p.trending).slice(0, 12);
   const looks = (trending.length ? trending : products).slice(0, 7);
 

@@ -11,14 +11,40 @@ import { seedCollections, seedCoupons, seedProducts, seedSettings } from "./seed
  * Product/collection images are stored in the `images` collection and served from /uploads/[id].
  */
 
-type G = typeof globalThis & { _stClient?: Promise<MongoClient>; _stDb?: Promise<Db> };
+type G = typeof globalThis & { _stClient?: Promise<MongoClient>; _stDb?: Promise<Db>; _stDevUri?: Promise<string> };
 const g = globalThis as G;
 
-function getClient(): Promise<MongoClient> {
+/**
+ * Connection string: MONGODB_URI (Atlas) everywhere. For local development only, when it's missing, we start a
+ * throwaway-free local MongoDB (data kept in ./.data/mongo) so `npm run dev` works with zero setup.
+ */
+function resolveUri(): Promise<string> {
   const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error("MONGODB_URI is not set. Add your MongoDB Atlas connection string to the environment variables.");
+  if (uri) return Promise.resolve(uri);
+  if (process.env.NODE_ENV === "production") {
+    return Promise.reject(
+      new Error("MONGODB_URI is not set. In Vercel: Project → Settings → Environment Variables → add MONGODB_URI (your MongoDB Atlas connection string), then redeploy."),
+    );
+  }
+  g._stDevUri ??= (async () => {
+    console.log("[db] MONGODB_URI not set — starting a local development MongoDB (first run downloads the server, ~1 min). Set MONGODB_URI in .env.local to use Atlas instead.");
+    const { MongoMemoryServer } = await import("mongodb-memory-server");
+    const { mkdirSync } = await import("fs");
+    const path = await import("path");
+    const dbPath = path.join(process.cwd(), ".data", "mongo");
+    mkdirSync(dbPath, { recursive: true });
+    const server = await MongoMemoryServer.create({ instance: { dbPath, storageEngine: "wiredTiger" } });
+    return server.getUri();
+  })().catch((e) => {
+    g._stDevUri = undefined;
+    throw new Error(`Could not start the local development database (${(e as Error).message}). Set MONGODB_URI in .env.local to a MongoDB Atlas connection string.`);
+  });
+  return g._stDevUri;
+}
+
+async function getClient(): Promise<MongoClient> {
   // cached on globalThis so dev hot-reloads and warm serverless invocations reuse one connection pool
-  g._stClient ??= new MongoClient(uri, { maxPoolSize: 10, serverSelectionTimeoutMS: 10_000 }).connect();
+  g._stClient ??= resolveUri().then((uri) => new MongoClient(uri, { maxPoolSize: 10, serverSelectionTimeoutMS: 10_000 }).connect());
   return g._stClient;
 }
 

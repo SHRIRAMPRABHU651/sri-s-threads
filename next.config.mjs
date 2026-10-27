@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // keep the Mongo driver (and the dev-only local Mongo) out of the webpack bundle
+  experimental: { serverComponentsExternalPackages: ["mongodb", "mongodb-memory-server"] },
   async headers() {
     return [
       {
