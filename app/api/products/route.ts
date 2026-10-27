@@ -1,4 +1,4 @@
-import { listProducts, saveProduct } from "@/lib/db";
+import { listCollections, listProducts, saveProduct } from "@/lib/db";
 import { fail, json, readJson, requireAdmin } from "@/lib/api";
 import { parseProduct } from "@/lib/productInput";
 import { cookies } from "next/headers";
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   const body = await readJson(req);
   if (!body) return fail("Invalid request body.");
-  const parsed = parseProduct(body);
+  const parsed = parseProduct(body, await listCollections(undefined, { includeInactive: true }));
   if ("error" in parsed) return fail(parsed.error);
   return json(await saveProduct(parsed), 201);
 }

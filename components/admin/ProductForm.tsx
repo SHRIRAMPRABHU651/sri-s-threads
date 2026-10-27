@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Product } from "@/lib/types";
-import { CATEGORIES, FABRICS, OCCASIONS, TOP_COLLECTIONS, inr, salePrice } from "@/lib/shared";
+import type { Collection, Product } from "@/lib/types";
+import { inr, salePrice } from "@/lib/shared";
 import { api } from "./api";
+import { uploadImage } from "./uploadImage";
 
 const toLocalInput = (iso?: string) => {
   if (!iso) return "";
@@ -14,22 +15,22 @@ const toLocalInput = (iso?: string) => {
 
 type Draft = {
   name: string; description: string; details: string; care: string; mrp: string; discountPercent: string; stock: string;
-  size: string; category: Product["category"]; collection: string; fabric: string; occasion: string;
+  size: string; collection: string; fabric: string; occasion: string;
   isNew: boolean; trending: boolean; active: boolean; saleEndsAt: string; images: string[]; colors: { name: string; image: string }[];
 };
 
 const blank: Draft = {
   name: "", description: "", details: "", care: "", mrp: "", discountPercent: "0", stock: "10", size: "Free size",
-  category: "saree", collection: "", fabric: "", occasion: "", isNew: true, trending: false, active: true, saleEndsAt: "", images: [], colors: [],
+  collection: "", fabric: "", occasion: "", isNew: true, trending: false, active: true, saleEndsAt: "", images: [], colors: [],
 };
 
-export default function ProductForm({ product, onClose, onSaved }: { product?: Product; onClose: () => void; onSaved: () => void }) {
+export default function ProductForm({ product, groups, onClose, onSaved }: { product?: Product; groups: Collection[]; onClose: () => void; onSaved: () => void }) {
   const [d, setD] = useState<Draft>(
     product
       ? {
           name: product.name, description: product.description, details: product.details, care: product.care,
           mrp: String(product.mrp), discountPercent: String(product.discountPercent), stock: String(product.stock), size: product.size,
-          category: product.category, collection: product.collection, fabric: product.fabric, occasion: product.occasion,
+          collection: product.collection, fabric: product.fabric, occasion: product.occasion,
           isNew: product.isNew, trending: product.trending, active: product.active, saleEndsAt: toLocalInput(product.saleEndsAt),
           images: product.images, colors: product.colors,
         }
@@ -51,12 +52,9 @@ export default function ProductForm({ product, onClose, onSaved }: { product?: P
     setUploading(true);
     setError("");
     for (const f of Array.from(files)) {
-      const form = new FormData();
-      form.append("file", f);
-      const res = await fetch("/api/upload", { method: "POST", body: form }).catch(() => null);
-      const body = await res?.json().catch(() => null);
-      if (res?.ok && body?.url) setD((x) => ({ ...x, images: [...x.images, body.url] }));
-      else setError(body?.error || "Upload failed.");
+      const r = await uploadImage(f);
+      if ("url" in r) setD((x) => ({ ...x, images: [...x.images, r.url] }));
+      else setError(r.error);
     }
     setUploading(false);
     if (file.current) file.current.value = "";
@@ -98,27 +96,22 @@ export default function ProductForm({ product, onClose, onSaved }: { product?: P
           </div>
           <label>Stock<input type="number" min={0} step="1" value={d.stock} onChange={(e) => set("stock", e.target.value)} /></label>
           <label>Size<input value={d.size} onChange={(e) => set("size", e.target.value)} maxLength={60} /></label>
-          <label>Category
-            <select value={d.category} onChange={(e) => set("category", e.target.value as Product["category"])}>
-              {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-            </select>
-          </label>
-          <label>Top collection
+          <label>Collection (e.g. Sarees, Chudidhar, Kurtis)
             <select value={d.collection} onChange={(e) => set("collection", e.target.value)}>
               <option value="">— none —</option>
-              {TOP_COLLECTIONS.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+              {groups.filter((g) => g.kind === "collection").map((g) => <option key={g.slug} value={g.slug}>{g.name}{g.active ? "" : " (hidden)"}</option>)}
             </select>
           </label>
           <label>Fabric
             <select value={d.fabric} onChange={(e) => set("fabric", e.target.value)}>
               <option value="">— none —</option>
-              {FABRICS.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+              {groups.filter((g) => g.kind === "fabric").map((g) => <option key={g.slug} value={g.slug}>{g.name}{g.active ? "" : " (hidden)"}</option>)}
             </select>
           </label>
           <label>Occasion
             <select value={d.occasion} onChange={(e) => set("occasion", e.target.value)}>
               <option value="">— none —</option>
-              {OCCASIONS.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+              {groups.filter((g) => g.kind === "occasion").map((g) => <option key={g.slug} value={g.slug}>{g.name}{g.active ? "" : " (hidden)"}</option>)}
             </select>
           </label>
           <label className="span2">Sale ends (optional — the product page counts down to this; otherwise it counts down to midnight)

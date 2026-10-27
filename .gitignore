@@ -4,8 +4,4 @@ next-env.d.ts
 *.tsbuildinfo
 .env
 .env.local
-# runtime data (created on first run)
-data/db.json
-data/*.tmp
-data/uploads/
 scratch_old

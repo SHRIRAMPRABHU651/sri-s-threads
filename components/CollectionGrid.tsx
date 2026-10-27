@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { CollectionCard } from "@/lib/shared";
+
+export type CollectionCard = { slug: string; name: string; image: string };
 
 /** Arched collection cards (Figma: collection_card). */
 export default function CollectionGrid({
@@ -19,7 +20,7 @@ export default function CollectionGrid({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={c.image} alt="" loading="lazy" />
           </div>
-          <span className="collection-card__label">{c.label}</span>
+          <span className="collection-card__label">{c.name}</span>
         </Link>
       ))}
     </div>

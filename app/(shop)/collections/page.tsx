@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
-import CollectionGrid from "@/components/CollectionGrid";
-import SectionTitle from "@/components/SectionTitle";
-import { TOP_COLLECTIONS } from "@/lib/shared";
+import CollectionsPage from "@/components/CollectionsPage";
+import { COLLECTION_KINDS } from "@/lib/shared";
 
-export const metadata: Metadata = { title: "Top Collection" };
+export const metadata: Metadata = { title: COLLECTION_KINDS.find((k) => k.kind === "collection")!.title };
 
 export default function Page() {
-  return (
-    <section className="section">
-      <SectionTitle as="h1">Top Collection</SectionTitle>
-      <CollectionGrid cards={TOP_COLLECTIONS} hrefFor={(c) => `/shop?collection=${c.slug}`} variant="3" />
-    </section>
-  );
+  return <CollectionsPage kind="collection" />;
 }

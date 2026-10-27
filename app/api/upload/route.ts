@@ -1,25 +1,19 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
 import { fail, json, requireAdmin } from "@/lib/api";
+import { saveImage } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
-const MAX = 6 * 1024 * 1024;
+const TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// Vercel serverless request bodies are capped at 4.5 MB; the admin UI compresses photos before upload.
+const MAX = 3.5 * 1024 * 1024;
 
-/** Admin-only image upload → data/uploads (served via /uploads/[name]). Returns the public URL. */
+/** Admin-only image upload. The file is stored in MongoDB and served from /uploads/[id]. */
 export async function POST(req: Request) {
   const denied = await requireAdmin();
   if (denied) return denied;
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) return fail("No file uploaded.");
-  const ext = TYPES[file.type];
-  if (!ext) return fail("Only JPG, PNG, WebP or GIF images are allowed.");
-  if (file.size > MAX) return fail("Image must be smaller than 6 MB.");
-  const dir = path.join(process.env.DATA_DIR || path.join(process.cwd(), "data"), "uploads");
-  await fs.mkdir(dir, { recursive: true });
-  const name = `${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
-  await fs.writeFile(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
-  return json({ url: `/uploads/${name}` }, 201);
+  if (!TYPES.includes(file.type)) return fail("Only JPG, PNG, WebP or GIF images are allowed.");
+  if (file.size > MAX) return fail("Image is too large (max 3.5 MB). Try a smaller photo.");
+  return json({ url: await saveImage(Buffer.from(await file.arrayBuffer()), file.type) }, 201);
 }

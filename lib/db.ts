@@ -1,209 +1,356 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
+import { cache } from "react";
 import { randomUUID } from "crypto";
-import type { Coupon, DB, Order, Product, Settings, Subscriber } from "./types";
-import { buildSeed } from "./seed";
+import { Binary, MongoClient, type Db } from "mongodb";
+import type { Collection, CollectionKind, Coupon, Order, OrderStatus, Product, Settings, Subscriber } from "./types";
+import { seedCollections, seedCoupons, seedProducts, seedSettings } from "./seed";
 
 /**
- * Tiny JSON-file database. Perfect for a single-server deployment (VPS, Docker volume, local).
- * On read-only/serverless hosts (e.g. Vercel) swap these functions for a hosted database —
- * every API route and page goes through this module only.
+ * MongoDB data layer (works on Vercel serverless — no local disk).
+ * Documents use the string `id` as Mongo's `_id`; everything outside this file sees plain `{ id, ... }` objects.
+ * Product/collection images are stored in the `images` collection and served from /uploads/[id].
  */
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "db.json");
 
-let cache: DB | null = null;
-let loading: Promise<DB> | null = null;
-// serialise writes so concurrent requests can't clobber each other
-let queue: Promise<unknown> = Promise.resolve();
+type G = typeof globalThis & { _stClient?: Promise<MongoClient>; _stDb?: Promise<Db> };
+const g = globalThis as G;
 
-/** Single-flight: concurrent first requests share one load (and one seed write). */
-function load(): Promise<DB> {
-  if (cache) return Promise.resolve(cache);
-  loading ??= (async () => {
-    let raw: string | null = null;
+function getClient(): Promise<MongoClient> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI is not set. Add your MongoDB Atlas connection string to the environment variables.");
+  // cached on globalThis so dev hot-reloads and warm serverless invocations reuse one connection pool
+  g._stClient ??= new MongoClient(uri, { maxPoolSize: 10, serverSelectionTimeoutMS: 10_000 }).connect();
+  return g._stClient;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const toDoc = <T extends { id: string }>(x: T): any => {
+  const { id, ...rest } = x;
+  return { _id: id, ...rest };
+};
+const fromDoc = <T>(d: any): T => {
+  const { _id, ...rest } = d;
+  return { id: _id, ...rest } as T;
+};
+const isDup = (e: unknown) => (e as { code?: number })?.code === 11000;
+const newId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+
+async function init(d: Db) {
+  const c = (name: string) => d.collection<any>(name);
+  await Promise.all([
+    d.collection("products").createIndex({ slug: 1 }, { unique: true }),
+    d.collection("products").createIndex({ createdAt: -1 }),
+    d.collection("coupons").createIndex({ code: 1 }, { unique: true }),
+    d.collection("collections").createIndex({ kind: 1, slug: 1 }, { unique: true }),
+    d.collection("orders").createIndex({ createdAt: -1 }),
+    d.collection("login_attempts").createIndex({ resetAt: 1 }, { expireAfterSeconds: 0 }),
+  ]);
+  // First run: seed starter data exactly once (the meta upsert acts as a cross-instance lock).
+  const lock = await c("meta").updateOne({ _id: "seed" }, { $setOnInsert: { at: new Date() } }, { upsert: true });
+  if (lock.upsertedId) {
     try {
-      raw = await fs.readFile(DB_FILE, "utf8");
+      await Promise.all([
+        c("products").insertMany(seedProducts().map(toDoc)),
+        c("collections").insertMany(seedCollections().map(toDoc)),
+        c("coupons").insertMany(seedCoupons().map(toDoc)),
+        c("settings").updateOne({ _id: "main" }, { $setOnInsert: seedSettings() }, { upsert: true }),
+      ]);
     } catch (e) {
-      // first run: create the seed. Any other read error must surface, never overwrite data.
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+      await c("meta").deleteOne({ _id: "seed" }); // allow a retry
+      throw e;
     }
-    if (raw === null) {
-      cache = buildSeed();
-      await persist(cache);
-    } else {
-      const parsed = JSON.parse(raw) as DB; // a corrupt file throws instead of being reseeded
-      // forward-compat for files written by older versions
-      parsed.subscribers ??= [];
-      parsed.settings = { ...buildSeed().settings, ...parsed.settings };
-      cache = parsed;
-    }
-    return cache as DB;
-  })().finally(() => { loading = null; });
-  return loading;
+  }
 }
 
-async function persist(db: DB) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tmp = `${DB_FILE}.${randomUUID()}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
-  await fs.rename(tmp, DB_FILE);
-}
-
-/** Run a mutation atomically and save. */
-async function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
-    const db = await load();
-    const result = await fn(db);
-    await persist(db);
-    return result;
+async function db(): Promise<Db> {
+  g._stDb ??= (async () => {
+    const client = await getClient();
+    const d = client.db(process.env.MONGODB_DB || "sris-threads");
+    await init(d);
+    return d;
+  })().catch((e) => {
+    g._stDb = undefined;
+    g._stClient = undefined;
+    throw e;
   });
-  queue = run.catch(() => undefined);
-  return run;
+  return g._stDb;
 }
 
-const nowIso = () => new Date().toISOString();
+const col = async (name: string) => (await db()).collection<any>(name);
+
+/* ---------------- Images (stored in MongoDB) ---------------- */
+export async function saveImage(data: Buffer, contentType: string): Promise<string> {
+  const id = newId("img");
+  await (await col("images")).insertOne({ _id: id, contentType, size: data.length, data: new Binary(data), createdAt: new Date() });
+  return `/uploads/${id}`;
+}
+
+export async function getImage(id: string): Promise<{ contentType: string; data: Buffer } | null> {
+  const doc = await (await col("images")).findOne({ _id: id });
+  return doc ? { contentType: doc.contentType, data: Buffer.from(doc.data.buffer) } : null;
+}
+
+/** Delete uploaded images that nothing references any more (keeps the free Atlas tier from filling up). */
+async function pruneImages(urls: string[]) {
+  const candidates = [...new Set(urls)].filter((u) => u.startsWith("/uploads/"));
+  const [products, collections, images] = await Promise.all([col("products"), col("collections"), col("images")]);
+  for (const url of candidates) {
+    const used =
+      (await products.countDocuments({ $or: [{ images: url }, { "colors.image": url }] }, { limit: 1 })) +
+      (await collections.countDocuments({ image: url }, { limit: 1 }));
+    if (!used) await images.deleteOne({ _id: url.slice("/uploads/".length) });
+  }
+}
+const productImages = (p: Pick<Product, "images" | "colors">) => [...p.images, ...p.colors.map((c) => c.image)];
 
 /* ---------------- Products ---------------- */
 export async function listProducts(opts: { includeInactive?: boolean } = {}): Promise<Product[]> {
-  const db = await load();
-  const list = opts.includeInactive ? db.products : db.products.filter((p) => p.active);
-  return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const docs = await (await col("products")).find(opts.includeInactive ? {} : { active: true }).sort({ createdAt: -1 }).toArray();
+  return docs.map((d) => fromDoc<Product>(d));
 }
 
 export async function getProduct(idOrSlug: string): Promise<Product | undefined> {
-  const db = await load();
-  return db.products.find((p) => p.id === idOrSlug || p.slug === idOrSlug);
+  const d = await (await col("products")).findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+  return d ? fromDoc<Product>(d) : undefined;
+}
+
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  const docs = await (await col("products")).find({ _id: { $in: ids } }).toArray();
+  return docs.map((d) => fromDoc<Product>(d));
 }
 
 export async function saveProduct(input: Omit<Product, "id" | "createdAt"> & { id?: string }): Promise<Product> {
-  return mutate((db) => {
-    const existing = input.id ? db.products.find((p) => p.id === input.id) : undefined;
-    // keep slugs unique
-    let slug = input.slug;
-    let n = 2;
-    while (db.products.some((p) => p.slug === slug && p.id !== existing?.id)) slug = `${input.slug}-${n++}`;
-    if (existing) {
-      Object.assign(existing, input, { slug, id: existing.id, createdAt: existing.createdAt });
-      return existing;
+  const products = await col("products");
+  const existing = input.id ? await products.findOne({ _id: input.id }) : null;
+  let slug = input.slug;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { id: _ignored, ...fields } = input;
+    void _ignored;
+    try {
+      if (existing) {
+        await products.updateOne({ _id: existing._id }, { $set: { ...fields, slug } });
+        const saved = fromDoc<Product>({ ...existing, ...fields, slug });
+        await pruneImages(productImages(fromDoc<Product>(existing)));
+        return saved;
+      }
+      const product: Product = { ...fields, slug, id: newId("p"), createdAt: new Date().toISOString() };
+      await products.insertOne(toDoc(product));
+      return product;
+    } catch (e) {
+      if (!isDup(e)) throw e;
+      slug = `${input.slug}-${randomUUID().slice(0, 4)}`; // slug taken → make it unique
     }
-    const product: Product = { ...input, slug, id: `p_${randomUUID().slice(0, 8)}`, createdAt: nowIso() };
-    db.products.push(product);
-    return product;
-  });
+  }
+  throw new Error("Could not generate a unique slug.");
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
-  return mutate((db) => {
-    const before = db.products.length;
-    db.products = db.products.filter((p) => p.id !== id);
-    return db.products.length < before;
-  });
+  const products = await col("products");
+  const doc = await products.findOne({ _id: id });
+  if (!doc) return false;
+  await products.deleteOne({ _id: id });
+  await pruneImages(productImages(fromDoc<Product>(doc)));
+  return true;
+}
+
+/* ---------------- Collections (admin-managed shop-by groups) ---------------- */
+export async function listCollections(kind?: CollectionKind, opts: { includeInactive?: boolean } = {}): Promise<Collection[]> {
+  const filter: any = {};
+  if (kind) filter.kind = kind;
+  if (!opts.includeInactive) filter.active = true;
+  const docs = await (await col("collections")).find(filter).sort({ sort: 1, name: 1 }).toArray();
+  return docs.map((d) => fromDoc<Collection>(d));
+}
+
+export async function saveCollection(input: Omit<Collection, "id"> & { id?: string }): Promise<Collection | { error: string }> {
+  const collections = await col("collections");
+  try {
+    if (input.id) {
+      const existing = await collections.findOne({ _id: input.id });
+      if (!existing) return { error: "Collection not found." };
+      // kind + slug are fixed after creation so products keep pointing at the right group
+      const { id, kind: _k, slug: _s, ...rest } = input;
+      void _k; void _s;
+      await collections.updateOne({ _id: id }, { $set: rest });
+      if (existing.image !== input.image) await pruneImages([existing.image]);
+      return fromDoc<Collection>({ ...existing, ...rest });
+    }
+    const created: Collection = { ...input, id: newId("col") };
+    await collections.insertOne(toDoc(created));
+    return created;
+  } catch (e) {
+    if (isDup(e)) return { error: "A collection with this name already exists in this group." };
+    throw e;
+  }
+}
+
+export async function deleteCollection(id: string): Promise<boolean> {
+  const collections = await col("collections");
+  const doc = await collections.findOne({ _id: id });
+  if (!doc) return false;
+  await collections.deleteOne({ _id: id });
+  // detach products from the removed group
+  await (await col("products")).updateMany({ [doc.kind]: doc.slug }, { $set: { [doc.kind]: "" } });
+  await pruneImages([doc.image]);
+  return true;
 }
 
 /* ---------------- Coupons ---------------- */
 export async function listCoupons(): Promise<Coupon[]> {
-  return [...(await load()).coupons].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const docs = await (await col("coupons")).find({}).sort({ createdAt: -1 }).toArray();
+  return docs.map((d) => fromDoc<Coupon>(d));
 }
 
 export async function getCouponByCode(code: string): Promise<Coupon | undefined> {
-  const c = code.trim().toUpperCase();
-  return (await load()).coupons.find((x) => x.code === c);
+  const d = await (await col("coupons")).findOne({ code: code.trim().toUpperCase() });
+  return d ? fromDoc<Coupon>(d) : undefined;
 }
 
 export async function saveCoupon(input: Omit<Coupon, "id" | "createdAt" | "used"> & { id?: string }): Promise<Coupon | { error: string }> {
-  return mutate((db) => {
-    const code = input.code.trim().toUpperCase();
-    const existing = input.id ? db.coupons.find((c) => c.id === input.id) : undefined;
-    if (db.coupons.some((c) => c.code === code && c.id !== existing?.id)) return { error: "A coupon with this code already exists." };
-    if (existing) {
-      Object.assign(existing, input, { code, id: existing.id, used: existing.used, createdAt: existing.createdAt });
-      return existing;
+  const coupons = await col("coupons");
+  const code = input.code.trim().toUpperCase();
+  try {
+    if (input.id) {
+      const existing = await coupons.findOne({ _id: input.id });
+      if (!existing) return { error: "Coupon not found." };
+      const { id, ...rest } = input;
+      await coupons.updateOne({ _id: id }, { $set: { ...rest, code } });
+      return fromDoc<Coupon>({ ...existing, ...rest, code });
     }
-    const coupon: Coupon = { ...input, code, id: `c_${randomUUID().slice(0, 8)}`, used: 0, createdAt: nowIso() };
-    db.coupons.push(coupon);
+    const coupon: Coupon = { ...input, code, id: newId("c"), used: 0, createdAt: new Date().toISOString() };
+    await coupons.insertOne(toDoc(coupon));
     return coupon;
-  });
+  } catch (e) {
+    if (isDup(e)) return { error: "A coupon with this code already exists." };
+    throw e;
+  }
 }
 
 export async function deleteCoupon(id: string): Promise<boolean> {
-  return mutate((db) => {
-    const before = db.coupons.length;
-    db.coupons = db.coupons.filter((c) => c.id !== id);
-    return db.coupons.length < before;
-  });
+  return (await (await col("coupons")).deleteOne({ _id: id })).deletedCount > 0;
+}
+
+/** Atomically claim one use of a coupon (respects the usage limit). */
+export async function reserveCoupon(code: string): Promise<boolean> {
+  const r = await (await col("coupons")).updateOne(
+    { code, active: true, $or: [{ usageLimit: 0 }, { $expr: { $lt: ["$used", "$usageLimit"] } }] },
+    { $inc: { used: 1 } },
+  );
+  return r.modifiedCount === 1;
+}
+export async function releaseCoupon(code: string) {
+  await (await col("coupons")).updateOne({ code, used: { $gt: 0 } }, { $inc: { used: -1 } });
+}
+
+/* ---------------- Stock ---------------- */
+type StockLine = { productId: string; qty: number };
+const byProduct = (lines: StockLine[]) => {
+  const m = new Map<string, number>();
+  lines.forEach((l) => m.set(l.productId, (m.get(l.productId) ?? 0) + l.qty));
+  return [...m];
+};
+
+/** Atomically take stock for every line, or take nothing. Returns the product id that was short, if any. */
+export async function reserveStock(lines: StockLine[]): Promise<{ ok: true } | { ok: false; productId: string }> {
+  const products = await col("products");
+  const done: [string, number][] = [];
+  for (const [id, qty] of byProduct(lines)) {
+    const r = await products.updateOne({ _id: id, stock: { $gte: qty } }, { $inc: { stock: -qty } });
+    if (r.modifiedCount !== 1) {
+      for (const [pid, q] of done) await products.updateOne({ _id: pid }, { $inc: { stock: q } });
+      return { ok: false, productId: id };
+    }
+    done.push([id, qty]);
+  }
+  return { ok: true };
+}
+export async function releaseStock(lines: StockLine[]) {
+  const products = await col("products");
+  for (const [id, qty] of byProduct(lines)) await products.updateOne({ _id: id }, { $inc: { stock: qty } });
 }
 
 /* ---------------- Orders ---------------- */
 export async function listOrders(): Promise<Order[]> {
-  return [...(await load()).orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const docs = await (await col("orders")).find({}).sort({ createdAt: -1 }).limit(500).toArray();
+  return docs.map((d) => fromDoc<Order>(d));
 }
 
-export async function createOrder(
-  build: (db: DB) => Omit<Order, "id" | "number" | "createdAt" | "status"> | { error: string },
-): Promise<Order | { error: string }> {
-  return mutate((db) => {
-    const draft = build(db);
-    if ("error" in draft) return draft;
-    db.orderSeq += 1;
-    const order: Order = {
-      ...draft,
-      id: `o_${randomUUID().slice(0, 8)}`,
-      number: `ST${db.orderSeq}`,
-      createdAt: nowIso(),
-      status: "new",
-    };
-    db.orders.push(order);
-    if (order.couponCode) {
-      const c = db.coupons.find((x) => x.code === order.couponCode);
-      if (c) c.used += 1;
-    }
-    return order;
-  });
+export async function insertOrder(draft: Omit<Order, "id" | "number" | "createdAt" | "status">): Promise<Order> {
+  const counter = await (await col("counters")).findOneAndUpdate({ _id: "orders" }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: "after" });
+  const order: Order = {
+    ...draft,
+    id: newId("o"),
+    number: `ST${1000 + (counter?.seq ?? 1)}`,
+    createdAt: new Date().toISOString(),
+    status: "new",
+  };
+  await (await col("orders")).insertOne(toDoc(order));
+  return order;
 }
 
-export async function setOrderStatus(id: string, status: Order["status"]): Promise<Order | undefined> {
-  return mutate((db) => {
-    const o = db.orders.find((x) => x.id === id);
-    if (o) o.status = status;
-    return o;
-  });
+export async function setOrderStatus(id: string, status: OrderStatus): Promise<Order | { error: string } | undefined> {
+  const orders = await col("orders");
+  const doc = await orders.findOne({ _id: id });
+  if (!doc) return undefined;
+  const order = fromDoc<Order>(doc);
+  const lines = order.items.map((i) => ({ productId: i.productId, qty: i.qty }));
+  if (status === "cancelled" && order.status !== "cancelled") await releaseStock(lines);
+  if (order.status === "cancelled" && status !== "cancelled") {
+    const r = await reserveStock(lines);
+    if (!r.ok) return { error: "Not enough stock to re-activate this order." };
+  }
+  await orders.updateOne({ _id: id }, { $set: { status } });
+  return { ...order, status };
 }
 
 export async function deleteOrder(id: string): Promise<boolean> {
-  return mutate((db) => {
-    const before = db.orders.length;
-    db.orders = db.orders.filter((o) => o.id !== id);
-    return db.orders.length < before;
-  });
+  const orders = await col("orders");
+  const doc = await orders.findOne({ _id: id });
+  if (!doc) return false;
+  const order = fromDoc<Order>(doc);
+  // an order that never shipped gives its stock back
+  if (order.status === "new" || order.status === "confirmed")
+    await releaseStock(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
+  await orders.deleteOne({ _id: id });
+  return true;
 }
 
 /* ---------------- Settings ---------------- */
-export async function getSettings(): Promise<Settings> {
-  return (await load()).settings;
-}
+export const getSettings = cache(async (): Promise<Settings> => {
+  const doc = await (await col("settings")).findOne({ _id: "main" });
+  const { _id, ...rest } = doc ?? ({} as any);
+  void _id;
+  return { ...seedSettings(), ...rest } as Settings;
+});
 
 export async function saveSettings(s: Settings): Promise<Settings> {
-  return mutate((db) => {
-    db.settings = s;
-    return db.settings;
-  });
-}
-
-/** Read-only snapshot for server components that need several collections. */
-export async function snapshot(): Promise<DB> {
-  return load();
+  await (await col("settings")).updateOne({ _id: "main" }, { $set: s }, { upsert: true });
+  return s;
 }
 
 /* ---------------- Newsletter ---------------- */
 export async function addSubscriber(email: string): Promise<void> {
-  await mutate((db) => {
-    const e = email.toLowerCase();
-    if (!db.subscribers.some((s) => s.email === e)) db.subscribers.push({ email: e, createdAt: nowIso() });
-  });
+  await (await col("subscribers")).updateOne({ _id: email.toLowerCase() }, { $setOnInsert: { createdAt: new Date().toISOString() } }, { upsert: true });
 }
 
 export async function listSubscribers(): Promise<Subscriber[]> {
-  return [...(await load()).subscribers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const docs = await (await col("subscribers")).find({}).sort({ createdAt: -1 }).limit(1000).toArray();
+  return docs.map((d) => ({ email: d._id, createdAt: d.createdAt }));
+}
+
+/* ---------------- Admin login throttle (shared across serverless instances) ---------------- */
+const MAX_FAILS = 6;
+const WINDOW_MS = 15 * 60_000;
+
+export async function isLoginBlocked(key: string): Promise<boolean> {
+  const d = await (await col("login_attempts")).findOne({ _id: key });
+  return !!d && d.resetAt > new Date() && d.n >= MAX_FAILS;
+}
+export async function recordLoginFailure(key: string) {
+  const attempts = await col("login_attempts");
+  const d = await attempts.findOne({ _id: key });
+  if (d && d.resetAt > new Date()) await attempts.updateOne({ _id: key }, { $inc: { n: 1 } });
+  else await attempts.updateOne({ _id: key }, { $set: { n: 1, resetAt: new Date(Date.now() + WINDOW_MS) } }, { upsert: true });
+}
+export async function clearLoginFailures(key: string) {
+  await (await col("login_attempts")).deleteOne({ _id: key });
 }

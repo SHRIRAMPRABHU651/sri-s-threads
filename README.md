@@ -1,61 +1,86 @@
 # Sri's Threads
 
-Mobile-first (and desktop-responsive) saree storefront built with **Next.js 14 (App Router) + TypeScript**.
-Frontend, backend (route handlers) and admin panel live in this one project. There is **no online payment**:
-customers add items to their bag, enter their mobile number + address, and the order opens in **WhatsApp**
-so you can confirm and process it there. Every order is also saved and visible in the admin.
+Women's ethnic-wear store (sarees, chudidhar, kurtis, lehengas, …) built with **Next.js 14 (App Router) + TypeScript**,
+backed by **MongoDB Atlas** and ready to deploy on **Vercel**. Frontend, backend (route handlers) and admin panel live in
+this one project. There is **no online payment**: customers add items to their bag, enter their mobile number and address,
+and the order opens in **WhatsApp** so you can confirm and process it there. Every order is also saved and visible in the admin.
 
-Design source: the Figma file "Sri's threads" (Home, Collection, Shop by fabric / occasion, Product pages).
+Design source: the Figma file "Sri's threads".
 
-## Run it
+## Deploy to Vercel (≈10 minutes)
+
+**1. MongoDB Atlas (free)**
+1. Create a free **M0** cluster at <https://www.mongodb.com/atlas>. Pick a region near your Vercel region
+   (Vercel's default is Washington DC `iad1` ↔ AWS `us-east-1`; for customers in India choose Atlas **Mumbai** and set
+   Vercel → Settings → Functions → Region to **Mumbai (bom1)**).
+2. *Database Access* → add a user with a password (read/write to any database).
+3. *Network Access* → **Add IP Address → Allow access from anywhere (0.0.0.0/0)**. Vercel uses changing IPs, so this is required.
+4. *Connect → Drivers* → copy the connection string (`mongodb+srv://…`) and put your password in it.
+
+**2. Vercel**
+1. Push this repo to GitHub → <https://vercel.com/new> → import it (framework is detected automatically).
+2. Add these **Environment Variables** (Production + Preview):
+
+| Variable | Value |
+| --- | --- |
+| `MONGODB_URI` | your Atlas connection string |
+| `MONGODB_DB` | `sris-threads` (any name) |
+| `ADMIN_USERNAME` | your admin username |
+| `ADMIN_PASSWORD` | a strong password |
+| `SESSION_SECRET` | long random string (`openssl rand -hex 32`) |
+| `WHATSAPP_NUMBER` | country code + number, digits only, e.g. `919876543210` |
+| `NEXT_PUBLIC_SITE_URL` | *(optional)* your custom domain, for sitemap/link previews |
+
+3. Deploy. Open `/admin`, sign in, and you're live. The first request seeds sample products, collections and coupons
+   — delete or edit them in the admin. (`ADMIN_PASSWORD` and `SESSION_SECRET` are required in production; the app refuses to
+   issue admin sessions without them.)
+
+## Run locally
 
 ```bash
 npm install
-cp .env.example .env.local      # then edit the values
-npm run dev                     # http://localhost:3000
-# production
-npm run build && npm start
+cp .env.example .env.local     # fill in MONGODB_URI etc. (an Atlas free cluster works fine for dev)
+npm run dev                    # http://localhost:3000
+npm run typecheck
 ```
-
-| Variable | Purpose |
-| --- | --- |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin login (`/admin`). **Required in production.** In dev it defaults to `admin` / `admin123`. |
-| `SESSION_SECRET` | Long random string that signs the admin cookie. **Required in production.** |
-| `WHATSAPP_NUMBER` | First-run default for the order WhatsApp number (country code + number, digits only). Change it any time in **Admin → Settings**. |
-| `DATA_DIR` | Optional. Where `db.json` and uploaded images are stored (default `./data`). |
 
 ## What's in it
 
-**Storefront** – loader (≈2 s, first visit per session) · home (hero carousel, collections, shop-by cards, trending carousel,
-looks, testimonials) · Top Collection / Shop by Fabric / Shop by Occasion · all-products page with search, sort and filters ·
-product page (gallery, colour options, sale countdown, coupon cards, add to bag / buy now, accordion) · wishlist · bag with
+**Storefront** – branded loader (~2 s, first visit per session) · home (hero carousel, featured collections, shop-by cards,
+trending, looks, testimonials) · **Top Collection / Shop by Fabric / Shop by Occasion** pages · all-products page with search,
+sort and filters · product page (gallery, colours, sale countdown, coupon cards, add to bag / buy now) · wishlist · bag with
 coupon codes · checkout (name, mobile, address → WhatsApp).
 
-**Admin (`/admin`, login required)** – add / edit / delete products (images upload, per-product **discount %**, stock, colours,
-collection / fabric / occasion, trending & “New” flags, sale end time, bulk “discount all”) · **coupon codes** (percent or flat,
-minimum order, max discount, usage limit, expiry, enable/disable) · orders (status, WhatsApp the customer, delete) ·
-settings (WhatsApp number, announcement bar, social links) · newsletter subscribers.
+**Admin (`/admin`)**
+- **Products** – add / edit / delete, photo upload, per-product **discount %**, stock, colours, collection / fabric / occasion,
+  trending & “New” flags, sale end time, “discount everything” shortcut.
+- **Collections** – add / edit / hide / delete the groups shown on the storefront (e.g. *Chudidhar*, *Kurtis*, *Lehengas*,
+  *Wedding Wear*, *Silk*), each with its own card image and display order; pick which appear on the home page.
+- **Coupons** – percent or flat, minimum order, max discount, usage limit, expiry, enable/disable.
+- **Orders** – status, WhatsApp the customer, delete. Cancelling an order puts its stock back.
+- **Settings** – WhatsApp number, announcement bar, social links, newsletter subscribers.
 
-**Backend** – `app/api/*` route handlers. Prices, discounts and coupons are always recomputed on the server when an order is
-placed, so the browser can't tamper with totals. Admin routes check a signed, httpOnly session cookie (and `middleware.ts` guards the UI).
+## How the data is stored
 
-## Data storage
+Everything is in MongoDB: `products`, `collections`, `coupons`, `orders`, `settings`, `subscribers`, and **`images`**
+(uploaded photos are stored as binary documents and served from `/uploads/<id>` with long-lived cache headers).
+Nothing is written to disk, so it works on Vercel's read-only filesystem.
 
-A small JSON file (`data/db.json`, created and seeded on first run) plus uploaded images in `data/uploads`.
-That is ideal for a single server / VPS / Docker volume. On serverless hosts with a read-only or ephemeral disk
-(e.g. Vercel) swap the functions in `lib/db.ts` for a hosted database – everything else goes through that one file.
-Back up the `data/` folder.
+- Photos are resized in the browser (max 1400 px, WebP) before upload — usually 50–300 KB each — which keeps well inside
+  Vercel's 4.5 MB request limit and makes the free 512 MB Atlas tier last for thousands of photos. Images no longer used by
+  any product or collection are deleted automatically.
+- Prices, discounts, coupons and stock are always decided on the server. Stock and coupon usage are claimed atomically, so
+  simultaneous orders can't oversell an item or exceed a coupon's usage limit.
+- Admin login is a signed, httpOnly cookie; repeated failed logins are throttled (stored in MongoDB so it works across
+  serverless instances).
 
 ## Logo
 
-The logo is hand-built SVG: `components/Logo.tsx` (used in the header, loader, footer, admin), plus standalone
-`public/logo-emblem.svg` and `public/logo.svg`.
+Hand-built SVG: `components/Logo.tsx` (header, loader, footer, admin) plus standalone `public/logo-emblem.svg` and `public/logo.svg`.
 
-## Notes on the Figma content
+## Content notes
 
-* Brand text “House of Qalakari” / “Qala Banarasi” is replaced with **Sri's Threads**; payment-method icons are removed.
-* The Figma file reuses placeholder content (jeans photos in “Trending”, hair-oil copy in the product accordion, sample
-  reviews with generic names). Products are seeded with the saree photos from the file; edit/replace them in the admin.
-  The testimonials are still the Figma sample text – swap them for real customer feedback in `components/Testimonials.tsx`.
-* The three “collection” pages share the same six arch cards in Figma; here each page has its own labels so the cards can
-  filter products (admin picks a fabric / occasion / collection per product).
+* The sample collections *Chudidhar / Kurtis / Lehengas / Anarkali* reuse the Figma photos as placeholders — upload real
+  images in **Admin → Collections**. Likewise replace the sample saree products with your own.
+* The three collection pages in Figma shared the same six cards; here each page has its own admin-managed list.
+* The customer reviews on the home page are the Figma sample text — replace them in `components/Testimonials.tsx`.

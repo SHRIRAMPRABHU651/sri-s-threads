@@ -1,4 +1,4 @@
-import { deleteProduct, getProduct, saveProduct } from "@/lib/db";
+import { deleteProduct, getProduct, listCollections, saveProduct } from "@/lib/db";
 import { fail, json, readJson, requireAdmin } from "@/lib/api";
 import { parseProduct } from "@/lib/productInput";
 
@@ -16,7 +16,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!existing) return fail("Product not found.", 404);
   const body = await readJson(req);
   if (!body) return fail("Invalid request body.");
-  const parsed = parseProduct(body);
+  const parsed = parseProduct(body, await listCollections(undefined, { includeInactive: true }));
   if ("error" in parsed) return fail(parsed.error);
   return json(await saveProduct({ ...parsed, id: existing.id }));
 }

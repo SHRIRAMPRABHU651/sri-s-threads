@@ -2,17 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import SectionTitle from "@/components/SectionTitle";
-import { listProducts } from "@/lib/db";
-import { CATEGORIES, FABRICS, OCCASIONS, TOP_COLLECTIONS, salePrice } from "@/lib/shared";
+import { listCollections, listProducts } from "@/lib/db";
+import { salePrice } from "@/lib/shared";
 
 export const metadata: Metadata = { title: "All Products" };
 
-type Search = { q?: string; sort?: string; category?: string; collection?: string; fabric?: string; occasion?: string };
+type Search = { q?: string; sort?: string; collection?: string; fabric?: string; occasion?: string };
 
 export default async function ShopPage({ searchParams }: { searchParams: Search }) {
-  const { q = "", sort = "new", category, collection, fabric, occasion } = searchParams;
-  let list = await listProducts();
-  if (category) list = list.filter((p) => p.category === category);
+  const { q = "", sort = "new", collection, fabric, occasion } = searchParams;
+  const [all, groups] = await Promise.all([listProducts(), listCollections()]);
+  let list = all;
   if (collection) list = list.filter((p) => p.collection === collection);
   if (fabric) list = list.filter((p) => p.fabric === fabric);
   if (occasion) list = list.filter((p) => p.occasion === occasion);
@@ -23,26 +23,30 @@ export default async function ShopPage({ searchParams }: { searchParams: Search 
   if (sort === "low") list = [...list].sort((a, b) => salePrice(a) - salePrice(b));
   if (sort === "high") list = [...list].sort((a, b) => salePrice(b) - salePrice(a));
 
-  const active = [
-    category && CATEGORIES.find((c) => c.slug === category)?.label,
-    collection && TOP_COLLECTIONS.find((c) => c.slug === collection)?.label,
-    fabric && FABRICS.find((c) => c.slug === fabric)?.label,
-    occasion && OCCASIONS.find((c) => c.slug === occasion)?.label,
-  ].filter(Boolean) as string[];
+  const label = (kind: string, slug?: string) => groups.find((g) => g.kind === kind && g.slug === slug)?.name ?? slug;
+  const current = { collection, fabric, occasion } as Record<string, string | undefined>;
+  const href = (over: Record<string, string | undefined>) => {
+    const sp = new URLSearchParams();
+    const next = { ...current, ...over, q: q || undefined, sort: sort !== "new" ? sort : undefined };
+    Object.entries(next).forEach(([k, v]) => v && sp.set(k, v));
+    const qs = sp.toString();
+    return qs ? `/shop?${qs}` : "/shop";
+  };
+  const activeLabels = [collection && label("collection", collection), fabric && label("fabric", fabric), occasion && label("occasion", occasion)].filter(Boolean) as string[];
+  const tops = groups.filter((g) => g.kind === "collection");
 
   return (
     <section className="section">
-      <SectionTitle as="h1">{active[0] ?? "All Products"}</SectionTitle>
+      <SectionTitle as="h1">{activeLabels[0] ?? "All Products"}</SectionTitle>
       <div className="shop-bar" id="search">
         <form action="/shop" method="get">
-          {category && <input type="hidden" name="category" value={category} />}
           {collection && <input type="hidden" name="collection" value={collection} />}
           {fabric && <input type="hidden" name="fabric" value={fabric} />}
           {occasion && <input type="hidden" name="occasion" value={occasion} />}
           <label className="field">
             <img src="/assets/icons/search.svg" alt="" />
             <span className="sr-only">Search products</span>
-            <input type="search" name="q" defaultValue={q} placeholder="Search sarees…" />
+            <input type="search" name="q" defaultValue={q} placeholder="Search kurtis, sarees, chudidhar…" />
           </label>
           <select className="select" name="sort" defaultValue={sort} aria-label="Sort by">
             <option value="new">Newest</option>
@@ -52,13 +56,12 @@ export default async function ShopPage({ searchParams }: { searchParams: Search 
           <button className="btn btn--primary" type="submit">Search</button>
         </form>
         <div className="chips">
-          <Link href="/shop" className={`chip${active.length === 0 && !q ? " chip--active" : ""}`}>All</Link>
-          {CATEGORIES.map((c) => (
-            <Link key={c.slug} href={`/shop?category=${c.slug}`} className={`chip${category === c.slug ? " chip--active" : ""}`}>{c.label}</Link>
+          <Link href="/shop" className={`chip${!collection && !fabric && !occasion && !q ? " chip--active" : ""}`}>All</Link>
+          {tops.map((c) => (
+            <Link key={c.slug} href={href({ collection: c.slug })} className={`chip${collection === c.slug ? " chip--active" : ""}`}>{c.name}</Link>
           ))}
-          {active.slice(category ? 1 : 0).map((a) => (
-            <span key={a} className="chip chip--active">{a}</span>
-          ))}
+          {fabric && <Link href={href({ fabric: undefined })} className="chip chip--active" aria-label={`Remove ${label("fabric", fabric)} filter`}>{label("fabric", fabric)} ×</Link>}
+          {occasion && <Link href={href({ occasion: undefined })} className="chip chip--active" aria-label={`Remove ${label("occasion", occasion)} filter`}>{label("occasion", occasion)} ×</Link>}
         </div>
         <p className="note">{list.length} {list.length === 1 ? "product" : "products"}</p>
       </div>

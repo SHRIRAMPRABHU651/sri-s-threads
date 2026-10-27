@@ -5,11 +5,12 @@ import Reels from "@/components/Reels";
 import SectionTitle from "@/components/SectionTitle";
 import Testimonials from "@/components/Testimonials";
 import TrendingCarousel from "@/components/TrendingCarousel";
-import { listProducts } from "@/lib/db";
+import { listCollections, listProducts } from "@/lib/db";
 import { BRAND } from "@/lib/shared";
 
 export default async function HomePage() {
-  const products = await listProducts();
+  const [products, collections] = await Promise.all([listProducts(), listCollections("collection")]);
+  const featured = collections.filter((c) => c.featured).slice(0, 6);
   const trending = products.filter((p) => p.trending).slice(0, 12);
   const looks = (trending.length ? trending : products).slice(0, 7);
 
@@ -17,17 +18,12 @@ export default async function HomePage() {
     <>
       <HeroCarousel />
 
-      <section className="section">
-        <SectionTitle>{BRAND}</SectionTitle>
-        <CollectionGrid
-          cards={[
-            { slug: "saree", label: "Sarees", image: "/assets/img/qala-sarees.webp" },
-            { slug: "dress-material", label: "Dress Materials", image: "/assets/img/qala-dress-materials.webp" },
-          ]}
-          hrefFor={(c) => `/shop?category=${c.slug}`}
-          variant="2"
-        />
-      </section>
+      {featured.length > 0 && (
+        <section className="section">
+          <SectionTitle>{BRAND}</SectionTitle>
+          <CollectionGrid cards={featured} hrefFor={(c) => `/shop?collection=${c.slug}`} variant={featured.length <= 2 ? "2" : undefined} />
+        </section>
+      )}
 
       <section className="promo-grid" aria-label="Shop by">
         <div className="promo-card">

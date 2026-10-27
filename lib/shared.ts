@@ -2,41 +2,10 @@ import type { Coupon, Product } from "./types";
 
 export const BRAND = "Sri's Threads";
 
-export type CollectionCard = { slug: string; label: string; image: string };
-
-/** "Top Collection" cards (Figma: Collection Page). */
-export const TOP_COLLECTIONS: CollectionCard[] = [
-  { slug: "silk-sarees", label: "Silk Sarees", image: "/assets/img/collection-1.webp" },
-  { slug: "cotton-classic", label: "Cotton Classic", image: "/assets/img/collection-2.webp" },
-  { slug: "pure-georgette", label: "Pure Georgette", image: "/assets/img/collection-3.webp" },
-  { slug: "pure-muslin", label: "Pure Muslin", image: "/assets/img/collection-4.webp" },
-  { slug: "festive-wear", label: "Festive Wear", image: "/assets/img/collection-5.webp" },
-  { slug: "wedding-sarees", label: "Wedding Sarees", image: "/assets/img/collection-6.webp" },
-];
-
-/** "Shop by Fabric" cards (Figma: Collection Page (by fabric)). */
-export const FABRICS: CollectionCard[] = [
-  { slug: "silk", label: "Silk Sarees", image: "/assets/img/collection-1.webp" },
-  { slug: "cotton", label: "Cotton Classic", image: "/assets/img/collection-2.webp" },
-  { slug: "georgette", label: "Pure Georgette", image: "/assets/img/collection-3.webp" },
-  { slug: "muslin", label: "Pure Muslin", image: "/assets/img/collection-4.webp" },
-  { slug: "chanderi", label: "Chanderi", image: "/assets/img/collection-5.webp" },
-  { slug: "banarasi", label: "Banarasi", image: "/assets/img/collection-6.webp" },
-];
-
-/** "Shop by Occasion" cards (Figma: Collection Page (by occassion)). */
-export const OCCASIONS: CollectionCard[] = [
-  { slug: "festive", label: "Festive Wear", image: "/assets/img/collection-1.webp" },
-  { slug: "wedding", label: "Wedding Sarees", image: "/assets/img/collection-2.webp" },
-  { slug: "party", label: "Party Wear", image: "/assets/img/collection-3.webp" },
-  { slug: "casual", label: "Casual Wear", image: "/assets/img/collection-4.webp" },
-  { slug: "office", label: "Office Wear", image: "/assets/img/collection-5.webp" },
-  { slug: "daily", label: "Daily Wear", image: "/assets/img/collection-6.webp" },
-];
-
-export const CATEGORIES = [
-  { slug: "saree", label: "Sarees" },
-  { slug: "dress-material", label: "Dress Materials" },
+export const COLLECTION_KINDS = [
+  { kind: "collection", title: "Top Collection", path: "/collections", param: "collection" },
+  { kind: "fabric", title: "Shop by Fabric", path: "/collections/fabric", param: "fabric" },
+  { kind: "occasion", title: "Shop by Occasion", path: "/collections/occasion", param: "occasion" },
 ] as const;
 
 export const salePrice = (p: Pick<Product, "mrp" | "discountPercent">) =>

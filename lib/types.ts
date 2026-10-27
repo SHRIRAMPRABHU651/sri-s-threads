@@ -13,7 +13,6 @@ export type Product = {
   images: string[];
   colors: ProductColor[];
   size: string;
-  category: "saree" | "dress-material";
   collection: string;
   fabric: string;
   occasion: string;
@@ -89,13 +88,19 @@ export type Settings = {
 
 export type Subscriber = { email: string; createdAt: string };
 
-export type DB = {
-  products: Product[];
-  coupons: Coupon[];
-  orders: Order[];
-  settings: Settings;
-  subscribers: Subscriber[];
-  orderSeq: number;
+export type CollectionKind = "collection" | "fabric" | "occasion";
+
+/** A shop-by group (e.g. "Chudidhar", "Silk", "Wedding"). Managed from the admin. */
+export type Collection = {
+  id: string;
+  kind: CollectionKind;
+  slug: string;
+  name: string;
+  image: string;
+  /** Collections only: show on the home page "Sri's Threads" section. */
+  featured: boolean;
+  active: boolean;
+  sort: number;
 };
 
 export type CartLine = {

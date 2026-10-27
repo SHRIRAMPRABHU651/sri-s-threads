@@ -2,10 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Loader from "@/components/Loader";
 import { StoreProvider } from "@/components/Store";
+import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: { default: "Sri's Threads — Traditional | Ethnic | Elegant", template: "%s — Sri's Threads" },
-  description: "Sarees and ethnic wear — order on WhatsApp. Traditional, ethnic and elegant, from Sri's Threads.",
+  description: "Women's ethnic wear — sarees, chudidhar, kurtis, lehengas and more. Order on WhatsApp. Traditional, ethnic and elegant, from Sri's Threads.",
+  openGraph: { siteName: "Sri's Threads", type: "website" },
   icons: { icon: "/logo-emblem.svg" },
 };
 

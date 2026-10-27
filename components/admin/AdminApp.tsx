@@ -1,18 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Coupon, Order, Product } from "@/lib/types";
+import type { Collection, Coupon, Order, Product } from "@/lib/types";
 import { inr } from "@/lib/shared";
 import { Emblem } from "../Logo";
 import { api } from "./api";
+import CollectionsTab from "./CollectionsTab";
 import CouponsTab from "./CouponsTab";
 import OrdersTab from "./OrdersTab";
 import ProductsTab from "./ProductsTab";
 import SettingsTab from "./SettingsTab";
 
-type Tab = "products" | "coupons" | "orders" | "settings";
+type Tab = "products" | "collections" | "coupons" | "orders" | "settings";
 const TABS: { id: Tab; label: string }[] = [
   { id: "products", label: "Products" },
+  { id: "collections", label: "Collections" },
   { id: "coupons", label: "Coupons" },
   { id: "orders", label: "Orders" },
   { id: "settings", label: "Settings" },
@@ -21,23 +23,30 @@ const TABS: { id: Tab; label: string }[] = [
 export default function AdminApp() {
   const [tab, setTab] = useState<Tab>("products");
   const [products, setProducts] = useState<Product[]>([]);
+  const [groups, setGroups] = useState<Collection[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const [p, c, o] = await Promise.all([
+    const [p, g, c, o] = await Promise.all([
       api<Product[]>("/api/products?all=1"),
+      api<Collection[]>("/api/collections?all=1"),
       api<Coupon[]>("/api/coupons"),
       api<Order[]>("/api/orders"),
     ]);
     if (p.ok) setProducts(p.data);
+    if (g.ok) setGroups(g.data);
     if (c.ok) setCoupons(c.data);
     if (o.ok) setOrders(o.data);
     setLoaded(true);
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
+  const counts: Record<string, number> = {};
+  products.forEach((p) => {
+    (["collection", "fabric", "occasion"] as const).forEach((k) => { if (p[k]) counts[`${k}:${p[k]}`] = (counts[`${k}:${p[k]}`] ?? 0) + 1; });
+  });
   const revenue = orders.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
 
   return (
@@ -72,7 +81,8 @@ export default function AdminApp() {
         </div>
         {!loaded ? <p className="a-mute">Loading…</p> : (
           <>
-            {tab === "products" && <ProductsTab products={products} reload={reload} />}
+            {tab === "products" && <ProductsTab products={products} groups={groups} reload={reload} />}
+            {tab === "collections" && <CollectionsTab groups={groups} counts={counts} reload={reload} />}
             {tab === "coupons" && <CouponsTab coupons={coupons} reload={reload} />}
             {tab === "orders" && <OrdersTab orders={orders} reload={reload} />}
             {tab === "settings" && <SettingsTab />}

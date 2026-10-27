@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { Product } from "@/lib/types";
+import type { Collection, Product } from "@/lib/types";
 import { inr, salePrice } from "@/lib/shared";
 import { api } from "./api";
 import ProductForm from "./ProductForm";
 
-export default function ProductsTab({ products, reload }: { products: Product[]; reload: () => void }) {
+export default function ProductsTab({ products, groups, reload }: { products: Product[]; groups: Collection[]; reload: () => void }) {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [q, setQ] = useState("");
   const [bulk, setBulk] = useState("");
@@ -55,7 +55,7 @@ export default function ProductsTab({ products, reload }: { products: Product[];
                 <span className={`a-pill${p.active ? "" : " a-pill--off"}`}>{p.active ? "Visible" : "Hidden"}</span>
                 {p.stock < 1 ? <span className="a-pill a-pill--bad">Out of stock</span> : <span>Stock: {p.stock}</span>}
                 {p.trending && <span className="a-pill a-pill--warn">Trending</span>}
-                <span>{p.category === "saree" ? "Saree" : "Dress material"}</span>
+                <span>{groups.find((g) => g.kind === "collection" && g.slug === p.collection)?.name ?? "No collection"}</span>
               </span>
             </div>
             <div className="a-row__actions">
@@ -69,6 +69,7 @@ export default function ProductsTab({ products, reload }: { products: Product[];
       </div>
       {editing && (
         <ProductForm
+          groups={groups}
           product={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); reload(); }}

@@ -1,11 +1,11 @@
 import { bool, num, str } from "./api";
-import { CATEGORIES, FABRICS, OCCASIONS, TOP_COLLECTIONS, slugify } from "./shared";
-import type { Product } from "./types";
+import { slugify } from "./shared";
+import type { Collection, Product } from "./types";
 
 type Input = Omit<Product, "id" | "createdAt">;
 
 /** Validates & normalises an admin-submitted product. Returns an error string on failure. */
-export function parseProduct(body: Record<string, unknown>): Input | { error: string } {
+export function parseProduct(body: Record<string, unknown>, groups: Collection[]): Input | { error: string } {
   const name = str(body.name, 160);
   if (name.length < 2) return { error: "Product name is required." };
   const mrp = Math.round(num(body.mrp));
@@ -22,8 +22,7 @@ export function parseProduct(body: Record<string, unknown>): Input | { error: st
         .slice(0, 10)
     : [];
 
-  const category = CATEGORIES.some((c) => c.slug === body.category) ? (body.category as Product["category"]) : "saree";
-  const pick = (v: unknown, list: { slug: string }[]) => (list.some((x) => x.slug === v) ? String(v) : "");
+  const pick = (v: unknown, kind: Collection["kind"]) => (groups.some((g) => g.kind === kind && g.slug === v) ? String(v) : "");
   const saleEnds = str(body.saleEndsAt, 40);
 
   return {
@@ -37,10 +36,9 @@ export function parseProduct(body: Record<string, unknown>): Input | { error: st
     images,
     colors,
     size: str(body.size, 60) || "Free size",
-    category,
-    collection: pick(body.collection, TOP_COLLECTIONS),
-    fabric: pick(body.fabric, FABRICS),
-    occasion: pick(body.occasion, OCCASIONS),
+    collection: pick(body.collection, "collection"),
+    fabric: pick(body.fabric, "fabric"),
+    occasion: pick(body.occasion, "occasion"),
     stock: Math.max(0, Math.round(num(body.stock))),
     isNew: bool(body.isNew),
     trending: bool(body.trending),

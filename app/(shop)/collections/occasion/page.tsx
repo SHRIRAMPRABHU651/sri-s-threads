@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
-import CollectionGrid from "@/components/CollectionGrid";
-import SectionTitle from "@/components/SectionTitle";
-import { OCCASIONS } from "@/lib/shared";
+import CollectionsPage from "@/components/CollectionsPage";
+import { COLLECTION_KINDS } from "@/lib/shared";
 
-export const metadata: Metadata = { title: "Shop by Occasion" };
+export const metadata: Metadata = { title: COLLECTION_KINDS.find((k) => k.kind === "occasion")!.title };
 
 export default function Page() {
-  return (
-    <section className="section">
-      <SectionTitle as="h1">Shop by Occasion</SectionTitle>
-      <CollectionGrid cards={OCCASIONS} hrefFor={(c) => `/shop?occasion=${c.slug}`} variant="3" />
-    </section>
-  );
+  return <CollectionsPage kind="occasion" />;
 }

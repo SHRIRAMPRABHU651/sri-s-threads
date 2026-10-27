@@ -11,7 +11,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const body = await readJson<{ status?: OrderStatus }>(req);
   if (!body?.status || !STATUSES.includes(body.status)) return fail("Invalid status.");
   const o = await setOrderStatus(params.id, body.status);
-  return o ? json(o) : fail("Order not found.", 404);
+  if (!o) return fail("Order not found.", 404);
+  return "error" in o ? fail(o.error, 409) : json(o);
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
